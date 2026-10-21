@@ -92,7 +92,8 @@
   .fil { display: flex; flex-direction: column; gap: 10px; }
   .bulle { max-width: 82%; padding: 10px 14px; border-radius: 16px; background: var(--carte); border: 2px solid var(--bord); }
   .bulle.de-moi { align-self: flex-end; }
-  .bulle .auteur { font-weight: 700; font-size: .85em; }
+  .bulle .auteur { font-weight: 700; font-size: .85em; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .bulle .auteur .avatar { width: 30px; height: 30px; font-size: 17px; }
   .bulle .heure { color: var(--doux); font-size: .75em; }
   .bulle .texte { white-space: pre-wrap; word-wrap: break-word; }
   .saisie { position: fixed; left: 0; right: 0; bottom: 84px; background: var(--fond); padding: 10px 16px; border-top: 2px solid var(--bord); }
@@ -916,7 +917,7 @@ function vueMessages() {
   return '<h2>Messages</h2><div class="fil">' + m.map(function (x) {
     var mb = membre(x.auteur);
     return '<div class="bulle' + (x.auteur === S.profil ? ' de-moi' : '') + '" style="border-color:' + esc(mb.couleur) + ';background:' + esc(mb.couleur) + '14">' +
-      '<div class="auteur" style="color:' + esc(mb.couleur) + '">' + esc(mb.emoji) + ' ' + esc(x.auteur) + ' <span class="heure">' + esc(heure(x.quand)) + '</span></div>' +
+      '<div class="auteur" style="color:' + esc(mb.couleur) + '">' + avatar(x.auteur) + ' ' + esc(x.auteur) + ' <span class="heure">' + esc(heure(x.quand)) + '</span></div>' +
       '<div class="texte">' + esc(x.texte) + '</div></div>';
   }).join('') + '</div>';
 }
