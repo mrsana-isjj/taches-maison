@@ -276,7 +276,7 @@
   .voile { position: fixed; inset: 0; background: rgba(20, 18, 12, .55); z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; }
   .fenetre { background: var(--carte); color: var(--texte); border-radius: 20px; width: min(640px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
   .fenetre-tete { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 2px solid var(--bord); }
-  .fenetre-tete h2 { margin: 0; font-size: 1.15em; }
+  .fenetre-tete h2 { margin: 0; font-size: 1.15em; display: flex; align-items: center; gap: 10px; }
   .fenetre-tete .bouton { min-height: 48px; padding: 6px 16px; }
   .heures { overflow-y: auto; padding: 6px 12px 14px; }
   .heure-ligne { display: grid; grid-template-columns: 4.2em 2.2em 3.6em 1fr; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 12px; }
@@ -303,6 +303,14 @@
   .veille-routine { margin-top: 18px; font-size: 1em; color: #B9B3A7; display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
   .veille-routine .mini .avatar { width: 30px; height: 30px; font-size: 17px; }
   .veille-aide { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: #6E6A62; font-size: .8em; }
+  button.mini { font: inherit; color: inherit; background: none; border: 2px solid transparent; border-radius: 999px; padding: 2px 6px 2px 2px; min-height: 40px; cursor: pointer; }
+  button.mini:active, button.mini:focus-visible { border-color: var(--accent); }
+  .detail-fille { overflow-y: auto; padding: 10px 18px 16px; }
+  .detail-fille h3 { margin: 12px 0 6px; }
+  .detail-fille .etape { margin-top: 6px; cursor: default; }
+  .detail-fille .etape.cochee { color: var(--doux); }
+  .detail-fille .ligne-tache { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 2px solid var(--bord); }
+  .detail-fille .ligne-tache:last-child { border-bottom: none; }
   .cache { display: none !important; }
   .chargement { text-align: center; padding: 60px 0; color: var(--doux); }
 </style>
@@ -648,6 +656,7 @@ function charger() {
 function rendre() {
   var app = document.getElementById('app');
   if (!S.etat) return;
+  if (typeof majDetailFille === 'function') majDetailFille();
   var nomsValides = S.etat.membres.map(function (m) { return m.nom; });
   if (!S.profil || nomsValides.indexOf(S.profil) < 0) {
     S.profil = null;
@@ -710,7 +719,7 @@ function tableauAccueil() {
   var pc = periodeEnCours(), chipR = '';
   if (pc) chipR = '<span class="resume-routine">' + MOMENTS_LIB[pc.moment].ico + ' ' + MOMENTS_LIB[pc.moment].court + lesFilles().map(function (f) {
     var l = libEtatRoutine(etatRoutine(pc, f.nom), true);
-    return '<span class="mini" title="' + esc(f.nom) + '">' + avatar(f.nom) + l.txt + '</span>';
+    return '<button class="mini" data-action="voirFille" data-nom="' + esc(f.nom) + '" aria-label="Ce qui reste à faire pour ' + esc(f.nom) + '">' + avatar(f.nom) + l.txt + '</button>';
   }).join('') + '</span>';
   return '<div class="accueil-titre"><h1>Aujourd\'hui</h1><span class="date">' + esc(dateLongue(auj)) + '</span></div>' +
     (t.length || chipR ? '<div class="resume">' + chipR + (!t.length ? '' :
@@ -1082,6 +1091,8 @@ document.addEventListener('click', function (ev) {
     return boutons.reduce(function (p, x) { return p.then(function () { return srv('valider', autorite(), x.dataset.date, x.dataset.id, x.dataset.qui, true); }); }, Promise.resolve())
       .then(appliquer).catch(erreur);
   }
+  if (a === 'voirFille') { ouvrirDetailFille(b.dataset.nom); return; }
+  if (a === 'fermerDetail') { fermerDetailFille(); return; }
   if (a === 'cocherRoutine') { cocherRoutineLocal(b.dataset.moment, id); return; }
   if (a === 'validerRoutine') { var vr = b.dataset.v === '1'; return occupe(b, srv('validerRoutine', autorite(), b.dataset.periode, b.dataset.moment, b.dataset.nom, vr)).then(siOk(vr ? 'Routine validée ⭐' : 'Validation annulée')); }
   if (a === 'dispenserRoutine') { var dr = b.dataset.v === '1'; return occupe(b, srv('dispenserRoutine', autorite(), b.dataset.periode, b.dataset.moment, b.dataset.nom, dr)).then(siOk(dr ? 'Dispensée 💤' : 'Dispense annulée')); }
@@ -1317,6 +1328,39 @@ document.addEventListener('submit', function (ev) {
   afficherRadios();
 })();
 
+/* ===== Fenêtre : ce qu'il reste à faire pour une fille (depuis l'accueil) ===== */
+function contenuDetailFille(nom) {
+  var auj = S.etat.aujourdhui, html = '';
+  periodesDuJour().forEach(function (p) {
+    var e = etatRoutine(p, nom), l = libEtatRoutine(e), m = MOMENTS_LIB[p.moment];
+    html += '<h3>' + m.ico + ' ' + m.nom + ' <span class="puce ' + l.cls + '">' + l.txt + '</span></h3>' +
+      e.items.map(function (r) {
+        var c = e.s.cochees.indexOf(r.id) >= 0;
+        return '<div class="etape' + (c ? ' cochee' : '') + '"><span class="coche" aria-hidden="true">' + (c ? '✓' : '') + '</span>' + esc(r.nom) + (c ? '' : ' <b style="margin-left:auto;color:var(--rouge)">pas encore fait</b>') + '</div>';
+      }).join('');
+  });
+  var mesTaches = tachesActives().filter(function (t) { return quiFait(t, auj) === nom; });
+  html += '<h3>📋 Tâches de la semaine (aujourd\'hui)</h3>' + (mesTaches.length ? mesTaches.map(function (t) {
+    var s = suivi(auj, t.id);
+    var etat = s.valide ? '<span class="puce valide">⭐ Validé</span>' : s.fait ? '<span class="puce attente">⏳ Fait</span>' : '<span class="puce afaire">○ Pas encore fait</span>';
+    return '<div class="ligne-tache"><b>' + esc(t.nom) + (s.repris ? ' 🤝' : '') + '</b>' + etat + '</div>';
+  }).join('') : '<p class="legende">Pas de tâche de la semaine aujourd\'hui.</p>');
+  return html;
+}
+function ouvrirDetailFille(nom) {
+  fermerDetailFille();
+  var v = document.createElement('div');
+  v.className = 'voile'; v.id = 'detailFille'; v.dataset.nom = nom; v.dataset.ouverte = String(Date.now());
+  v.innerHTML = '<div class="fenetre" role="dialog" aria-modal="true" aria-label="Ce qui reste à faire pour ' + esc(nom) + '">' +
+    '<div class="fenetre-tete"><h2>' + avatar(nom) + ' ' + esc(nom) + '</h2><button class="bouton leger" type="button" data-action="fermerDetail">✕ Fermer</button></div>' +
+    '<div class="detail-fille">' + contenuDetailFille(nom) + '</div></div>';
+  document.body.appendChild(v);
+}
+function fermerDetailFille() { var f = document.getElementById('detailFille'); if (f) f.remove(); }
+function majDetailFille() { var f = document.getElementById('detailFille'); if (f && S.etat) f.querySelector('.detail-fille').innerHTML = contenuDetailFille(f.dataset.nom); }
+document.addEventListener('click', function (ev) { var f = document.getElementById('detailFille'); if (f && ev.target === f) fermerDetailFille(); });
+setInterval(function () { var f = document.getElementById('detailFille'); if (f && Date.now() - Number(f.dataset.ouverte) > 120000) fermerDetailFille(); }, 15000);
+
 /* ===== Économiseur d'écran : grande horloge après un temps sans toucher l'écran ===== */
 function delaiVeille() { var v = S.etat ? S.etat.veille : 5; return (v === undefined || v === null) ? 5 : Number(v); }
 var dernierToucher = Date.now(), veilleOuverte = false, veillePos = 0;
@@ -1347,6 +1391,7 @@ function ouvrirVeille() {
   if (veilleOuverte) return;
   veilleOuverte = true;
   var f = document.getElementById('fenetreMeteo'); if (f) f.remove();
+  fermerDetailFille();
   var v = document.createElement('div');
   v.className = 'veille'; v.id = 'veille'; v.setAttribute('role', 'button'); v.setAttribute('aria-label', 'Touche l\'écran pour revenir');
   v.innerHTML = '<div class="veille-bloc"></div><div class="veille-aide">Touche l\'écran pour revenir</div>';
