@@ -292,6 +292,17 @@
   .applis { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }
   .applis button { min-height: 52px; border-radius: 14px; border: 2px solid var(--bord); background: var(--carte); font-weight: 600; font-size: .8em; padding: 4px; }
   @media (min-width: 1000px) and (max-height: 860px) { .applis button { min-height: 46px; } }
+  /* Économiseur d'écran */
+  .veille { position: fixed; inset: 0; z-index: 40; background: #0B0D10; color: #E9E5DC; cursor: pointer; overflow: hidden; }
+  .veille-bloc { position: absolute; text-align: center; transition: left 2s ease, top 2s ease; transform: translate(-50%, -50%); }
+  .veille-heure { font-size: clamp(90px, 17vw, 220px); font-weight: 700; line-height: 1; letter-spacing: .02em; }
+  .veille-date { font-size: 1.5em; color: #B9B3A7; margin-top: 10px; }
+  .veille-meteo { font-size: 1.7em; margin-top: 18px; display: flex; gap: 14px; justify-content: center; align-items: center; }
+  .veille-meteo .ico { font-size: 1.6em; }
+  .veille-meteo .txt { font-size: .6em; color: #B9B3A7; }
+  .veille-routine { margin-top: 18px; font-size: 1em; color: #B9B3A7; display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
+  .veille-routine .mini .avatar { width: 30px; height: 30px; font-size: 17px; }
+  .veille-aide { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: #6E6A62; font-size: .8em; }
   .cache { display: none !important; }
   .chargement { text-align: center; padding: 60px 0; color: var(--doux); }
 </style>
@@ -979,6 +990,9 @@ function vueParents() {
       (S.codes && Object.keys(S.codes).some(function (k) { return S.codes[k]; }) ?
         '<div><button class="bouton leger" data-action="voirCodes">' + (S.voirCodes ? '🙈 Masquer les codes' : '👁 Voir les codes') + '</button></div>' : '') +
     '</div>' +
+    '<div class="champ"><label for="veilleDelai">Économiseur d\'écran (grande horloge) après</label><select id="veilleDelai">' +
+      [[1, '1 minute sans toucher l\'écran'], [2, '2 minutes'], [5, '5 minutes'], [10, '10 minutes'], [15, '15 minutes'], [0, 'Jamais']].map(function (o) {
+        return '<option value="' + o[0] + '"' + (delaiVeille() === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
     '<div class="champ"><label for="expiration">Déconnexion automatique après</label><select id="expiration">' +
       [[60, '1 minute sans rien toucher'], [120, '2 minutes'], [300, '5 minutes'], [900, '15 minutes'], [0, 'Jamais']].map(function (o) {
         return '<option value="' + o[0] + '"' + (dureeExpiration() === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
@@ -1113,6 +1127,7 @@ document.addEventListener('change', function (ev) {
     sel.disabled = t.value !== 'fixe';
   }
   if (t.id === 'expiration') { occupe(null, srv('changerExpiration', S.pin, Number(t.value))).then(siOk('Réglage enregistré')); return; }
+  if (t.id === 'veilleDelai') { occupe(null, srv('changerVeille', S.pin, Number(t.value))).then(siOk('Réglage enregistré')); return; }
   if (t.id === 'soirJours') { occupe(null, srv('changerSoirJours', S.pin, t.value)).then(siOk('Réglage enregistré')); return; }
   if (t.id === 'seuil') { occupe(null, srv('changerSeuil', S.pin, Number(t.value))).then(siOk('Seuil mis à jour')); return; }
   if (t.id === 'freq') occupe(null, srv('changerFrequence', S.pin, Number(t.value))).then(siOk('Rotation mise à jour'));
@@ -1199,6 +1214,7 @@ document.addEventListener('submit', function (ev) {
       .then(function (m) {
         donneesMeteo = m;
         var t = temps(m.current.weather_code), j = m.daily;
+        window.meteoVeille = { ico: t[0], temp: Math.round(m.current.temperature_2m), txt: t[1], max: Math.round(j.temperature_2m_max[0]), min: Math.round(j.temperature_2m_min[0]), pluie: j.precipitation_probability_max[0] };
         var noms = ['Auj.', 'Demain', new Date(j.time[2] + 'T12:00').toLocaleDateString('fr-BE', { weekday: 'short' })];
         document.getElementById('meteo').className = '';
         document.getElementById('meteo').innerHTML =
@@ -1300,6 +1316,64 @@ document.addEventListener('submit', function (ev) {
   });
   afficherRadios();
 })();
+
+/* ===== Économiseur d'écran : grande horloge après un temps sans toucher l'écran ===== */
+function delaiVeille() { var v = S.etat ? S.etat.veille : 5; return (v === undefined || v === null) ? 5 : Number(v); }
+var dernierToucher = Date.now(), veilleOuverte = false, veillePos = 0;
+['click', 'touchstart', 'keydown', 'input', 'scroll', 'mousemove'].forEach(function (t) {
+  document.addEventListener(t, function () { if (!veilleOuverte) dernierToucher = Date.now(); }, { passive: true, capture: true });
+});
+function contenuVeille() {
+  var d = new Date(), pad2 = function (n) { return (n < 10 ? '0' : '') + n; };
+  var m = window.meteoVeille, html = '<div class="veille-heure">' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + '</div>' +
+    '<div class="veille-date">' + esc(d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })) + '</div>';
+  if (m) html += '<div class="veille-meteo"><span class="ico">' + m.ico + '</span><b>' + m.temp + '°</b><span class="txt">' + esc(m.txt) + '<br>' + m.max + '° / ' + m.min + '° · pluie ' + m.pluie + ' %</span></div>';
+  var pc = S.etat && typeof periodeEnCours === 'function' ? periodeEnCours() : null;
+  if (pc) html += '<div class="veille-routine">' + MOMENTS_LIB[pc.moment].ico + ' ' + MOMENTS_LIB[pc.moment].court + lesFilles().map(function (f) {
+    return '<span class="mini">' + avatar(f.nom) + libEtatRoutine(etatRoutine(pc, f.nom), true).txt + '</span>';
+  }).join('') + '</div>';
+  return html;
+}
+// Le bloc change de place chaque minute, pour ne pas marquer l'écran
+var POSITIONS_VEILLE = [[50, 45], [38, 35], [62, 58], [40, 60], [60, 36], [50, 55]];
+function majVeille(bouger) {
+  var v = document.getElementById('veille'); if (!v) return;
+  var b = v.querySelector('.veille-bloc');
+  b.innerHTML = contenuVeille();
+  if (bouger) { veillePos = (veillePos + 1) % POSITIONS_VEILLE.length; }
+  b.style.left = POSITIONS_VEILLE[veillePos][0] + '%'; b.style.top = POSITIONS_VEILLE[veillePos][1] + '%';
+}
+function ouvrirVeille() {
+  if (veilleOuverte) return;
+  veilleOuverte = true;
+  var f = document.getElementById('fenetreMeteo'); if (f) f.remove();
+  var v = document.createElement('div');
+  v.className = 'veille'; v.id = 'veille'; v.setAttribute('role', 'button'); v.setAttribute('aria-label', 'Touche l\'écran pour revenir');
+  v.innerHTML = '<div class="veille-bloc"></div><div class="veille-aide">Touche l\'écran pour revenir</div>';
+  document.body.appendChild(v);
+  veillePos = 0; majVeille(false);
+}
+function fermerVeille() {
+  var v = document.getElementById('veille'); if (v) v.remove();
+  veilleOuverte = false; dernierToucher = Date.now();
+}
+// Le toucher qui réveille l'écran ne doit rien activer d'autre
+var finVeille = 0;
+['pointerdown', 'touchstart', 'mousedown', 'pointerup', 'touchend', 'mouseup', 'click'].forEach(function (t) {
+  document.addEventListener(t, function (ev) {
+    if (veilleOuverte) {
+      ev.preventDefault(); ev.stopPropagation();
+      if (t === 'pointerdown' || t === 'touchstart' || t === 'mousedown') { fermerVeille(); finVeille = Date.now(); }
+    } else if (Date.now() - finVeille < 800) { ev.preventDefault(); ev.stopPropagation(); }   // fin du même toucher
+  }, { capture: true, passive: false });
+});
+setInterval(function () {
+  var d = delaiVeille();
+  if (!veilleOuverte && d > 0 && S.etat && Date.now() - dernierToucher > d * 60000) ouvrirVeille();
+  else if (veilleOuverte && d === 0) fermerVeille();
+}, 5000);
+setInterval(function () { if (veilleOuverte) majVeille(true); }, 60000);
+setInterval(function () { if (veilleOuverte) majVeille(false); }, 15000);
 
 /* Mise à jour en direct : toutes les 10 secondes quand l'écran est visible */
 setInterval(function () { if (!document.hidden) charger(); }, 10000);
