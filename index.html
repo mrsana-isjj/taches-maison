@@ -251,6 +251,23 @@
     .meteo-jours .ico { font-size: 1.3em; }
     .radios button { min-height: 46px; }
   }
+  /* Routines (matin, soir, week-end) */
+  .routine-titre { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .etape { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; min-height: 56px; margin-top: 8px; padding: 8px 14px;
+           border-radius: 14px; border: 2px solid var(--bord); background: var(--carte); font-weight: 600; }
+  .etape .coche { width: 34px; height: 34px; flex: none; border-radius: 10px; border: 3px solid var(--bord); display: grid; place-items: center; font-weight: 700; }
+  .etape.cochee { background: var(--vert-fond); border-color: var(--vert); }
+  .etape.cochee .coche { background: var(--vert); border-color: var(--vert); color: #fff; }
+  .etape:disabled { cursor: default; }
+  .puce.dispense { background: var(--alt); color: var(--doux); }
+  .ligne-routine { padding: 6px 0; border-bottom: 2px solid var(--bord); }
+  .ligne-routine:last-child { border-bottom: none; }
+  .ligne-routine .actions .bouton { min-height: 44px; padding: 6px 12px; }
+  .resume .resume-routine { background: var(--carte); border: 2px solid var(--bord); display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .mini { display: inline-flex; align-items: center; gap: 3px; }
+  .mini .avatar { width: 24px; height: 24px; font-size: 14px; border-width: 1px !important; }
+  .grille td.cellule-routine { font-size: .8em; white-space: nowrap; }
+  .cellule-routine .mr { display: inline-block; margin: 0 2px; }
   .cache { display: none !important; }
   .chargement { text-align: center; padding: 60px 0; color: var(--doux); }
 </style>
@@ -349,7 +366,7 @@ function pastille(nom) {
 function suivi(date, id) { return S.etat.suivi[date + '|' + id] || { fait: false, valide: false, repris: false, personne: '' }; }
 // Qui fait réellement la tâche ce jour-là (celle qui l'a reprise, sinon celle de la rotation)
 function quiFait(t, date) { var s = suivi(date, t.id); return (s.repris && s.personne) ? s.personne : t.personne; }
-function pts(nom) { return Math.max(0, (S.etat.points || {})[nom] || 0); }
+function pts(nom) { return (S.etat.points || {})[nom] || 0; }
 function retraitsDe(nom) { return (S.etat.retraits || []).filter(function (r) { return r.personne === nom; }).reverse(); }
 function mesRetraits(nom, max) {
   var r = retraitsDe(nom).slice(0, max);
@@ -359,7 +376,7 @@ function mesRetraits(nom, max) {
   }).join('') + '</div>';
 }
 function barrePoints(nom) {
-  var p = pts(nom), seuil = S.etat.seuil || 10, pct = Math.min(100, Math.round(p / seuil * 100));
+  var p = pts(nom), seuil = S.etat.seuil || 10, pct = Math.max(0, Math.min(100, Math.round(p / seuil * 100)));
   return '<div class="barre' + (p >= seuil ? ' pleine' : '') + '" role="progressbar" aria-valuemin="0" aria-valuemax="' + seuil + '" aria-valuenow="' + p + '"><span style="width:' + pct + '%"></span></div>';
 }
 function toast(t) {
@@ -368,6 +385,179 @@ function toast(t) {
 }
 function estParent() { return membre(S.profil).role === 'parent'; }
 function tachesActives() { return S.etat.taches.filter(function (t) { return t.active; }).sort(function (a, b) { return a.ordre - b.ordre; }); }
+
+/* ===== Routines (matin, soir, week-end) ===== */
+var MOMENTS_LIB = {
+  matin:   { ico: '☀️', nom: 'Routine du matin', court: 'Matin' },
+  soir:    { ico: '🌙', nom: 'Routine du soir', court: 'Soir' },
+  weekend: { ico: '🧹', nom: 'Routine du week-end', court: 'Week-end' }
+};
+function lesFilles() { return S.etat.membres.filter(function (m) { return m.role === 'fille'; }); }
+function routinesDe(moment) { return (S.etat.routines || []).filter(function (r) { return r.active && r.moment === moment; }).sort(function (a, b) { return a.ordre - b.ordre; }); }
+function suiviRoutine(periode, moment, nom) { return (S.etat.suiviRoutines || {})[periode + '|' + moment + '|' + nom] || { cochees: [], valide: '', dispense: false, close: false }; }
+function etatRoutine(p, nom) {
+  var items = routinesDe(p.moment), s = suiviRoutine(p.periode, p.moment, nom);
+  var n = items.filter(function (r) { return s.cochees.indexOf(r.id) >= 0; }).length;
+  return { items: items, s: s, n: n, total: items.length, complete: items.length > 0 && n === items.length };
+}
+function periodesDuJour() { return (S.etat.periodes || []).filter(function (p) { return routinesDe(p.moment).length; }); }
+// Routine à montrer sur l'accueil : le matin jusqu'à 13 h, le soir ensuite
+function periodeEnCours() {
+  var ps = periodesDuJour(); if (!ps.length) return null;
+  var de = function (m) { return ps.filter(function (p) { return p.moment === m; })[0]; };
+  if (de('soir') && (new Date().getHours() >= 13 || (!de('matin') && !de('weekend')))) return de('soir');
+  return de('matin') || de('weekend') || ps[0];
+}
+function libEtatRoutine(e, court) {
+  if (e.s.valide) return { cls: 'valide', txt: '⭐' + (court ? '' : ' Validée') };
+  if (e.s.dispense) return { cls: 'dispense', txt: '💤' + (court ? '' : ' Dispensée') };
+  if (e.complete) return { cls: 'attente', txt: '⏳' + (court ? '' : ' À valider') };
+  return { cls: 'afaire', txt: e.n + '/' + e.total };
+}
+function dateCourte(iso) { var p = iso.split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2], 12)).toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', timeZone: 'UTC' }); }
+function libPeriode(m) { return m.moment === 'weekend' ? 'week-end du ' + dateCourte(m.periode) : dateLongue(m.periode); }
+function manqueesDe(nom) { return (S.etat.manquees || []).filter(function (m) { return m.personne === nom; }); }
+function mesManquees(nom, max) {
+  var r = manqueesDe(nom).slice(0, max);
+  if (!r.length) return '';
+  return '<div style="margin-top:10px"><b style="font-size:.9em">Routines pas faites</b>' + r.map(function (m) {
+    return '<div class="legende"><span class="moins">−1</span> ' + MOMENTS_LIB[m.moment].ico + ' ' + esc(MOMENTS_LIB[m.moment].nom) + ' · ' + esc(libPeriode(m)) + '</div>';
+  }).join('') + '</div>';
+}
+
+// Une fille coche une étape : affichage immédiat, puis envoi au serveur (dans l'ordre)
+var fileRoutines = Promise.resolve();
+function cocherRoutineLocal(moment, id) {
+  var p = (S.etat.periodes || []).filter(function (x) { return x.moment === moment; })[0];
+  if (!p) return;
+  var qui = S.profil, k = p.periode + '|' + moment + '|' + qui;
+  S.etat.suiviRoutines = S.etat.suiviRoutines || {};
+  var s = S.etat.suiviRoutines[k] || { cochees: [], valide: '', dispense: false, close: false };
+  if (s.valide || s.dispense) return;
+  var coche = s.cochees.indexOf(id) < 0;
+  s.cochees = coche ? s.cochees.concat([id]) : s.cochees.filter(function (x) { return x !== id; });
+  S.etat.suiviRoutines[k] = s;
+  rendre();
+  S.envois = (S.envois || 0) + 1;
+  fileRoutines = fileRoutines.then(function () { return srv('cocherRoutine', qui, moment, id, coche); })
+    .then(function (e) { S.envois--; if (!S.envois) appliquer(e); },
+          function (err) { S.envois--; erreur(err); charger(); });
+}
+
+function vueMesRoutines() {
+  var ps = periodesDuJour();
+  if (!ps.length) return '';
+  return '<h2>Mes routines</h2>' + (S.etat.routinesPause ? '<p class="legende" style="margin-top:-6px">⏸ Routines en pause (vacances) : pas de point en moins.</p>' : '') +
+    ps.map(function (p) {
+      var e = etatRoutine(p, S.profil), m = MOMENTS_LIB[p.moment], l = libEtatRoutine(e);
+      var bloque = !!(e.s.valide || e.s.dispense);
+      return '<div class="carte routine"><div class="routine-titre"><b>' + m.ico + ' ' + m.nom + (p.moment === 'weekend' ? ' <span class="legende">(samedi ou dimanche)</span>' : '') + '</b>' +
+        '<span class="puce ' + l.cls + '">' + l.txt + '</span></div>' +
+        e.items.map(function (r) {
+          var c = e.s.cochees.indexOf(r.id) >= 0;
+          return '<button class="etape' + (c ? ' cochee' : '') + '" data-action="cocherRoutine" data-moment="' + p.moment + '" data-id="' + esc(r.id) + '"' + (bloque ? ' disabled' : '') +
+            ' aria-pressed="' + c + '"><span class="coche" aria-hidden="true">' + (c ? '✓' : '') + '</span>' + esc(r.nom) + '</button>';
+        }).join('') +
+        (e.complete && !bloque ? '<div class="legende">Bravo ! Papa ou maman va valider ta routine.</div>' : '') + '</div>';
+    }).join('');
+}
+
+// Page d'un parent : routines du jour et routines pas validées (rattrapage)
+function sectionRoutinesParent(auth) {
+  var ps = periodesDuJour(), fl = lesFilles(), html = '', nbFinies = 0;
+  var attr = function (p, nom, v) { return ' data-periode="' + p.periode + '" data-moment="' + p.moment + '" data-nom="' + esc(nom) + '" data-v="' + v + '"'; };
+  if (ps.length) {
+    html += '<h2>Routines d\'aujourd\'hui' + (S.etat.routinesPause ? ' · ⏸ en pause' : '') + '</h2><div class="carte">';
+    ps.forEach(function (p, ip) {
+      var m = MOMENTS_LIB[p.moment];
+      html += '<h3' + (ip ? ' style="margin-top:14px"' : '') + '>' + m.ico + ' ' + m.nom + '</h3>' + fl.map(function (f) {
+        var e = etatRoutine(p, f.nom), l = libEtatRoutine(e);
+        var reste = e.items.filter(function (r) { return e.s.cochees.indexOf(r.id) < 0; }).map(function (r) { return r.nom; });
+        var btn = '';
+        if (auth) {
+          if (e.s.valide) btn = '<button class="bouton leger" data-action="validerRoutine"' + attr(p, f.nom, 0) + '>Annuler</button>';
+          else if (e.s.dispense) btn = '<button class="bouton leger" data-action="dispenserRoutine"' + attr(p, f.nom, 0) + '>Annuler la dispense</button>';
+          else {
+            if (e.complete) nbFinies++;
+            btn = '<button class="bouton ' + (e.complete ? 'vert' : 'leger') + '" data-action="validerRoutine"' + attr(p, f.nom, 1) + (e.complete ? ' data-rv="1"' : '') + '>✓ Valider</button>' +
+                  '<button class="bouton leger" data-action="dispenserRoutine"' + attr(p, f.nom, 1) + '>💤 Dispenser</button>';
+          }
+        }
+        return '<div class="ligne-qui ligne-routine"><span>' + pastille(f.nom) + ' <span class="puce ' + l.cls + '">' + l.txt + '</span>' +
+          (reste.length && e.n && !e.s.valide && !e.s.dispense ? '<span class="legende" style="display:block;margin:2px 0 0">Reste : ' + esc(reste.join(', ')) + '</span>' : '') +
+          '</span><span class="actions">' + btn + '</span></div>';
+      }).join('');
+    });
+    if (nbFinies > 1) html += '<button class="bouton" style="margin-top:10px" data-action="toutValiderRoutines">Valider les ' + nbFinies + ' routines finies</button>';
+    html += '<p class="legende">Les filles cochent les étapes. Une routine ni validée ni dispensée coûte 1 point le lendemain (le lundi pour le week-end).</p></div>';
+  }
+  var mq = (S.etat.manquees || []).slice(0, 12);
+  if (auth && mq.length) {
+    html += '<h2>Routines pas validées <span class="moins">(−1 point)</span></h2><div class="carte">' + mq.map(function (m) {
+      return '<div class="ligne-qui ligne-routine"><span>' + pastille(m.personne) + ' ' + MOMENTS_LIB[m.moment].ico + ' ' + esc(libPeriode(m)) +
+        (m.cochees ? '<span class="legende" style="display:block;margin:2px 0 0">' + m.cochees + ' étape' + (m.cochees > 1 ? 's' : '') + ' cochée' + (m.cochees > 1 ? 's' : '') + '</span>' : '') + '</span>' +
+        '<span class="actions"><button class="bouton leger" data-action="validerRoutine"' + attr(m, m.personne, 1) + '>✓ C\'était fait</button>' +
+        '<button class="bouton leger" data-action="dispenserRoutine"' + attr(m, m.personne, 1) + '>💤 Dispenser</button></span></div>';
+    }).join('') + '<p class="legende">Oubli de validation, malade, absente ? « C\'était fait » ou « Dispenser » rend le point.</p></div>';
+  }
+  return html;
+}
+
+function grilleRoutines() {
+  if (!(S.etat.routines || []).some(function (r) { return r.active; })) return '';
+  var pj = S.etat.periodesJours || {}, auj = S.etat.aujourdhui;
+  var enCours = function (p) { return (S.etat.periodes || []).some(function (x) { return x.moment === p.moment && x.periode === p.periode; }); };
+  return '<h2>Routines de la semaine</h2><div class="carte grille-wrap"><table class="grille"><tr><th></th>' +
+    S.etat.jours.map(function (j, i) { return '<th class="' + (j === auj ? 'jour-actuel' : '') + '">' + JOURS_COURTS[i] + '<br>' + (+j.slice(8)) + '</th>'; }).join('') + '</tr>' +
+    lesFilles().map(function (f) {
+      return '<tr><td class="tache-nom">' + esc(f.nom) + '</td>' + S.etat.jours.map(function (j) {
+        var cell = (pj[j] || []).filter(function (p) { return routinesDe(p.moment).length; }).map(function (p) {
+          var e = etatRoutine(p, f.nom);
+          var sym = e.s.valide ? '⭐' : e.s.dispense ? '💤' : e.s.close ? '✗' : e.complete ? '⏳' : enCours(p) ? e.n + '/' + e.total : (j < auj ? '·' : '');
+          return '<span class="mr">' + MOMENTS_LIB[p.moment].ico + '<b>' + sym + '</b></span>';
+        }).join('');
+        return '<td class="cellule-routine' + (j === auj ? ' jour-actuel' : '') + '">' + cell + '</td>';
+      }).join('') + '</tr>';
+    }).join('') + '</table><div class="legende">☀️ matin · 🌙 soir · 🧹 week-end — ⭐ validée · ⏳ finie, à valider · ✗ pas validée (−1 point) · 💤 dispensée</div></div>';
+}
+
+function ligneRoutine(r) {
+  return '<div class="ligne-admin' + (r.active ? '' : ' inactive') + '" data-rligne="' + esc(r.id) + '">' +
+    '<span class="num" aria-hidden="true">' + MOMENTS_LIB[r.moment].ico + '</span>' +
+    '<input data-champ="nom" value="' + esc(r.nom) + '" aria-label="Nom de l\'étape">' +
+    '<div class="reglages"><select data-champ="moment" aria-label="Moment">' + optionsMoment(r.moment) + '</select></div>' +
+    '<div class="actions"><label class="case"><input type="checkbox" data-champ="active"' + (r.active ? ' checked' : '') + '> Active</label>' +
+    '<button class="bouton" data-action="enregistrerRoutine" data-id="' + esc(r.id) + '">💾 Enregistrer</button>' +
+    '<button class="bouton danger pousse" data-action="supprimerRoutine" data-id="' + esc(r.id) + '">🗑 Supprimer</button></div></div>';
+}
+function optionsMoment(sel) {
+  return ['matin', 'soir', 'weekend'].map(function (m) { return '<option value="' + m + '"' + (m === sel ? ' selected' : '') + '>' + MOMENTS_LIB[m].ico + ' ' + MOMENTS_LIB[m].court + '</option>'; }).join('');
+}
+function carteAdminRoutines() {
+  var tous = (S.etat.routines || []).slice().sort(function (a, b) { return a.ordre - b.ordre; });
+  var jours = { matin: 'lundi → vendredi', soir: S.etat.soirJours === 'dim-jeu' ? 'dimanche → jeudi' : 'lundi → vendredi', weekend: 'une fois, samedi ou dimanche' };
+  return '<div class="carte"><h3>Les routines</h3><p class="legende" style="margin-top:0">Les filles cochent chaque étape ; un parent valide la routine entière sur sa page. Une routine ni validée ni dispensée coûte 1 point le lendemain (le lundi pour le week-end).</p>' +
+    ['matin', 'soir', 'weekend'].map(function (mo) {
+      var rs = tous.filter(function (r) { return r.moment === mo; });
+      return '<h3 style="margin-top:14px">' + MOMENTS_LIB[mo].ico + ' ' + MOMENTS_LIB[mo].nom + ' <span class="legende">' + jours[mo] + '</span></h3>' +
+        '<div class="liste-taches">' + (rs.length ? rs.map(ligneRoutine).join('') : '<div class="legende">Aucune étape.</div>') + '</div>';
+    }).join('') +
+    '<div class="ajout-tache"><h3>➕ Ajouter une étape</h3><div class="ligne-admin" data-rligne="nouvelle">' +
+    '<input data-champ="nom" placeholder="Ex. : Se brosser les dents" aria-label="Nom de la nouvelle étape">' +
+    '<div class="reglages" style="margin-top:8px"><select data-champ="moment" aria-label="Moment">' + optionsMoment('soir') + '</select></div>' +
+    '<div class="actions" style="margin-top:8px"><button class="bouton vert" data-action="ajouterRoutine">+ Ajouter</button></div></div></div>' +
+    '<div class="champ" style="margin-top:16px"><label for="soirJours">Routine du soir</label><select id="soirJours">' +
+    '<option value="lun-ven"' + (S.etat.soirJours !== 'dim-jeu' ? ' selected' : '') + '>du lundi au vendredi</option>' +
+    '<option value="dim-jeu"' + (S.etat.soirJours === 'dim-jeu' ? ' selected' : '') + '>du dimanche au jeudi (veille d\'école)</option></select></div>' +
+    '<div class="actions" style="align-items:center">' + (S.etat.routinesPause
+      ? '<button class="bouton vert" data-action="pauseRoutines" data-v="0">▶ Reprendre les routines</button><span class="legende" style="margin:0">⏸ En pause : aucun point retiré.</span>'
+      : '<button class="bouton leger" data-action="pauseRoutines" data-v="1">⏸ Mettre en pause (vacances)</button>') + '</div></div>';
+}
+function lireRoutine(id) {
+  var l = document.querySelector('[data-rligne="' + id + '"]');
+  var g = function (c) { return l.querySelector('[data-champ="' + c + '"]'); };
+  return { id: id, nom: g('nom').value, moment: g('moment').value, active: g('active') ? g('active').checked : true };
+}
 
 /* ===== Expiration de la session après inactivité ===== */
 function dureeExpiration() { var e = S.etat ? S.etat.expiration : 60; return (e === undefined || e === null) ? 60 : Number(e); }
@@ -404,7 +594,7 @@ function appliquer(etat) {
 }
 function erreur(e) { toast((e && e.message) ? e.message : 'Oups, réessaie'); }
 function charger() {
-  return srv('getEtat').then(appliquer).catch(function (e) {
+  return srv('getEtat').then(function (e) { if (!S.envois) appliquer(e); }).catch(function (e) {
     if (e && e.message === 'non-configure') {
       if (document.getElementById('lienInstall')) return;   // ne pas effacer une saisie en cours
       document.getElementById('app').innerHTML = '<div class="carte" style="margin-top:40px"><h2>Appli pas encore installée sur cet appareil</h2>' +
@@ -480,11 +670,16 @@ function tableauAccueil() {
     return '<tr class="' + (s.fait ? 'fini' : '') + '"><td class="t-nom">' + esc(x.nom) + '<div class="qui-mobile">' + quiHtml + '</div></td><td class="t-qui">' + quiHtml + '</td><td class="t-etat">' + etat + '</td></tr>';
   });
   var reste = t.length - nbValide - nbAttente;
+  var pc = periodeEnCours(), chipR = '';
+  if (pc) chipR = '<span class="resume-routine">' + MOMENTS_LIB[pc.moment].ico + ' ' + MOMENTS_LIB[pc.moment].court + lesFilles().map(function (f) {
+    var l = libEtatRoutine(etatRoutine(pc, f.nom), true);
+    return '<span class="mini" title="' + esc(f.nom) + '">' + avatar(f.nom) + l.txt + '</span>';
+  }).join('') + '</span>';
   return '<div class="accueil-titre"><h1>Aujourd\'hui</h1><span class="date">' + esc(dateLongue(auj)) + '</span></div>' +
-    (t.length ? '<div class="resume">' +
+    (t.length || chipR ? '<div class="resume">' + chipR + (!t.length ? '' :
       (reste ? '<span style="background:var(--fond);border:2px dashed var(--bord)">○ ' + reste + ' à faire</span>' : '<span style="background:var(--vert-fond);color:var(--vert)">🎉 Tout est fait !</span>') +
       (nbAttente ? '<span style="background:var(--jaune-fond);color:var(--jaune)">⏳ ' + nbAttente + ' à valider</span>' : '') +
-      (nbValide ? '<span style="background:var(--vert-fond);color:var(--vert)">⭐ ' + nbValide + ' validée' + (nbValide > 1 ? 's' : '') + '</span>' : '') + '</div>' : '') +
+      (nbValide ? '<span style="background:var(--vert-fond);color:var(--vert)">⭐ ' + nbValide + ' validée' + (nbValide > 1 ? 's' : '') + '</span>' : '')) + '</div>' : '') +
     '<div class="carte" style="padding:6px 14px">' + (t.length ? '<table class="tableau">' + lignes.join('') + '</table>' : '<div class="vide">Aucune tâche aujourd\'hui.</div>') + '</div>';
 }
 
@@ -530,8 +725,9 @@ function vueTaches() {
   var p = pts(S.profil), seuil = S.etat.seuil || 10;
   var html = '<div class="carte"><div class="points"><span class="score">⭐ ' + p + ' / ' + seuil + '</span>' + barrePoints(S.profil) + '</div>' +
     (p >= seuil ? '<div class="gagne">🎁 Tu as gagné une récompense ! Va voir papa ou maman.</div>'
-                : '<div class="legende">Encore ' + (seuil - p) + ' point' + (seuil - p > 1 ? 's' : '') + ' avant ta récompense. 1 tâche validée = 1 point.</div>') +
-    mesRetraits(S.profil, 3) + '</div>';
+                : '<div class="legende">Encore ' + (seuil - p) + ' point' + (seuil - p > 1 ? 's' : '') + ' avant ta récompense. 1 tâche validée = +1 point · 1 routine pas faite = −1 point.</div>') +
+    mesRetraits(S.profil, 3) + mesManquees(S.profil, 3) + '</div>';
+  html += vueMesRoutines();
 
   var miennes = actives.filter(function (t) { return t.personne === S.profil; });
   var reprises = actives.filter(function (t) { var s = suivi(auj, t.id); return t.personne !== S.profil && s.repris && s.personne === S.profil; });
@@ -568,7 +764,7 @@ function vueTableauParent() {
       '<input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off"></div>' +
       '<button class="bouton" type="submit">Continuer</button></form>' +
       '<p class="legende">Astuce : mets un code secret sur ton profil (touche ton prénom en haut). Ensuite, plus besoin du code parents ici.</p></div>' +
-      '<h2>Aujourd\'hui</h2>' + t.map(function (x) { return carteTache(x, auj, true); }).join('');
+      sectionRoutinesParent(false) + '<h2>Aujourd\'hui</h2>' + t.map(function (x) { return carteTache(x, auj, true); }).join('');
   }
   // Tâches à valider : cette semaine jusqu'à aujourd'hui, cochées mais pas validées
   var aValider = [];
@@ -581,6 +777,7 @@ function vueTableauParent() {
       esc(a.qui) + (a.repris ? ' 🤝 reprise' : '') + ' · ' + esc(dateLongue(a.j)) + '</span></span><button class="bouton vert" data-av="1" data-action="valider" data-id="' + a.t.id + '" data-date="' + a.j + '" data-qui="' + esc(a.qui) + '">Valider</button></div>';
   }).join('') + (aValider.length > 1 ? '<button class="bouton" style="margin-top:8px" data-action="toutValider">Tout valider</button>' : '')
     : '<div class="vide">Rien à valider pour le moment.</div>') + '</div>';
+  html += sectionRoutinesParent(true);
 
   html += '<h2>Aujourd\'hui</h2><div class="carte">' + (t.length ? t.map(function (x) {
     var s = suivi(auj, x.id), qf = quiFait(x, auj);
@@ -627,6 +824,7 @@ function vueSemaine() {
         return '<td class="' + (j === S.etat.aujourdhui ? 'jour-actuel' : '') + '" aria-label="' + lib + '">' + ico + '</td>';
       }).join('') + '</tr>';
     }).join('') + '</table><div class="legende">⭐ validé · ⏳ fait, en attente de validation · · pas fait</div></div>';
+  html += grilleRoutines();
   var suivante = t.filter(function (x) { return x.type === 'tournante'; });
   if (suivante.length) {
     html += '<h2>' + (S.etat.frequence > 1 ? 'À la prochaine rotation' : 'La semaine prochaine') + '</h2><div class="carte liste-qui">' +
@@ -733,6 +931,7 @@ function vueParents() {
     '<div class="reglages" style="margin-top:8px"><select data-champ="type" aria-label="Type"><option value="tournante">🔄 Tournante</option><option value="fixe">📌 Fixe</option></select>' +
     '<select data-champ="assignee" disabled aria-label="Pour qui"><option value="">Pour qui ?</option>' + filles.map(function (f) { return '<option>' + esc(f.nom) + '</option>'; }).join('') + '</select></div>' +
     '<div class="actions" style="margin-top:8px"><button class="bouton vert" data-action="ajouter">+ Ajouter</button></div></div></div></div>';
+  html += carteAdminRoutines();
 
   html += '<div class="carte"><h3>Rotation</h3><div class="champ"><label for="freq">Les tâches tournent toutes les…</label>' +
     '<select id="freq">' + [1, 2, 3, 4].map(function (n) { return '<option value="' + n + '"' + (S.etat.frequence === n ? ' selected' : '') + '>' + n + ' semaine' + (n > 1 ? 's' : '') + '</option>'; }).join('') + '</select></div>' +
@@ -843,6 +1042,23 @@ document.addEventListener('click', function (ev) {
     return boutons.reduce(function (p, x) { return p.then(function () { return srv('valider', autorite(), x.dataset.date, x.dataset.id, x.dataset.qui, true); }); }, Promise.resolve())
       .then(appliquer).catch(erreur);
   }
+  if (a === 'cocherRoutine') { cocherRoutineLocal(b.dataset.moment, id); return; }
+  if (a === 'validerRoutine') { var vr = b.dataset.v === '1'; return occupe(b, srv('validerRoutine', autorite(), b.dataset.periode, b.dataset.moment, b.dataset.nom, vr)).then(siOk(vr ? 'Routine validée ⭐' : 'Validation annulée')); }
+  if (a === 'dispenserRoutine') { var dr = b.dataset.v === '1'; return occupe(b, srv('dispenserRoutine', autorite(), b.dataset.periode, b.dataset.moment, b.dataset.nom, dr)).then(siOk(dr ? 'Dispensée 💤' : 'Dispense annulée')); }
+  if (a === 'toutValiderRoutines') {
+    var rv = Array.prototype.slice.call(document.querySelectorAll('[data-rv]'));
+    b.disabled = true;
+    return rv.reduce(function (p, x) { return p.then(function () { return srv('validerRoutine', autorite(), x.dataset.periode, x.dataset.moment, x.dataset.nom, true); }); }, Promise.resolve())
+      .then(function (e) { appliquer(e); toast('Routines validées ⭐'); }).catch(erreur);
+  }
+  if (a === 'enregistrerRoutine') return occupe(b, srv('enregistrerRoutine', S.pin, lireRoutine(id))).then(siOk('Enregistré'));
+  if (a === 'ajouterRoutine') {
+    var nr = lireRoutine('nouvelle'); nr.id = '';
+    if (!nr.nom.trim()) { toast('Donne un nom à l\'étape'); return; }
+    return occupe(b, srv('enregistrerRoutine', S.pin, nr)).then(siOk('Étape ajoutée'));
+  }
+  if (a === 'supprimerRoutine') { if (confirm('Supprimer cette étape ?')) return occupe(b, srv('supprimerRoutine', S.pin, id)); return; }
+  if (a === 'pauseRoutines') { var pz = b.dataset.v === '1'; return occupe(b, srv('pauseRoutines', S.pin, pz)).then(siOk(pz ? 'Routines en pause ⏸' : 'Routines reprises ▶')); }
   if (a === 'enregistrer') return occupe(b, srv('enregistrerTache', S.pin, lireLigne(id))).then(siOk('Enregistré'));
   if (a === 'ajouter') {
     var n = lireLigne('nouvelle'); n.id = '';
@@ -871,6 +1087,7 @@ document.addEventListener('change', function (ev) {
     sel.disabled = t.value !== 'fixe';
   }
   if (t.id === 'expiration') { occupe(null, srv('changerExpiration', S.pin, Number(t.value))).then(siOk('Réglage enregistré')); return; }
+  if (t.id === 'soirJours') { occupe(null, srv('changerSoirJours', S.pin, t.value)).then(siOk('Réglage enregistré')); return; }
   if (t.id === 'seuil') { occupe(null, srv('changerSeuil', S.pin, Number(t.value))).then(siOk('Seuil mis à jour')); return; }
   if (t.id === 'freq') occupe(null, srv('changerFrequence', S.pin, Number(t.value))).then(siOk('Rotation mise à jour'));
 });
