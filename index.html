@@ -20,12 +20,13 @@
     --jaune-fond: #FDF3DC;
     --rouge: #B83A3A;
     --ombre: 0 2px 8px rgba(40, 35, 20, .08);
+    --alt: #F1EADB;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --fond: #1E2024; --carte: #2A2D33; --texte: #EEEAE2; --doux: #B5B0A6; --bord: #3B3F47;
       --accent: #7DB8D6; --vert: #6CC891; --vert-fond: #24382C; --jaune: #E3B25B; --jaune-fond: #3A3222;
-      --rouge: #E07B7B; --ombre: none;
+      --rouge: #E07B7B; --ombre: none; --alt: #33363D;
     }
   }
   * { box-sizing: border-box; }
@@ -206,6 +207,27 @@
   .radios button { min-height: 56px; border-radius: 14px; border: 2px solid var(--bord); background: var(--carte); font-weight: 600; font-size: .85em; padding: 6px; }
   .radios button.joue { background: var(--accent); color: #fff; border-color: var(--accent); }
   .radio-etat { margin-top: 8px; font-size: .85em; color: var(--doux); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  /* Espace parents : liste des tâches, une carte par tâche */
+  .liste-taches { display: grid; gap: 12px; }
+  .liste-taches .ligne-admin { display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; align-items: center;
+    padding: 14px; border: 2px solid var(--bord); border-left: 10px solid var(--accent); border-radius: 16px; background: var(--carte); }
+  .liste-taches .ligne-admin:nth-child(even) { background: var(--alt); }
+  .liste-taches .ligne-admin.fixe { border-left-color: var(--jaune); }
+  .liste-taches .ligne-admin.inactive { opacity: .6; border-left-color: var(--doux); }
+  .ligne-admin .num { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 700;
+    background: var(--accent); color: #fff; }
+  .ligne-admin.fixe .num { background: var(--jaune); }
+  .ligne-admin .reglages { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .liste-taches .ligne-admin .actions { grid-column: 1 / -1; align-items: center; padding-top: 8px; border-top: 2px dashed var(--bord); }
+  .ligne-admin .actions .pousse { margin-left: auto; }
+  .ajout-tache { margin-top: 16px; padding: 14px; border: 3px dashed var(--vert); border-radius: 16px; display: grid; gap: 8px; }
+  .ajout-tache h3 { margin: 0; color: var(--vert); }
+  .ajout-tache .ligne-admin { border: none; padding: 0; display: block; }
+  .ajout-tache .ligne-admin input[data-champ=nom] { width: 100%; }
+  .legende-couleurs { display: flex; gap: 14px; flex-wrap: wrap; font-size: .85em; color: var(--doux); margin: 4px 0 12px; }
+  .legende-couleurs span::before { content: ''; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .legende-couleurs .lt::before { background: var(--accent); }
+  .legende-couleurs .lf::before { background: var(--jaune); }
   .cache { display: none !important; }
   .chargement { text-align: center; padding: 60px 0; color: var(--doux); }
 </style>
@@ -669,25 +691,27 @@ function vueParents() {
   var filles = S.etat.membres.filter(function (m) { return m.role === 'fille'; });
   var html = '<div class="entete"><h2 style="margin:0">Espace parents</h2><button class="bouton leger" data-action="sortir">Fermer 🔒</button></div>';
   var toutesTaches = S.etat.taches.slice().sort(function (a, b) { return a.ordre - b.ordre; });
-  html += '<div class="carte"><h3>Les tâches</h3>' + toutesTaches.map(function (x, i) {
-    return '<div class="ligne-admin" data-ligne="' + x.id + '">' +
+  html += '<div class="carte"><h3>Les tâches</h3>' +
+    '<div class="legende-couleurs"><span class="lt">🔄 Tournante : change de personne à chaque rotation</span><span class="lf">📌 Fixe : toujours la même personne</span></div>' +
+    '<div class="liste-taches">' + toutesTaches.map(function (x, i) {
+    return '<div class="ligne-admin ' + x.type + (x.active ? '' : ' inactive') + '" data-ligne="' + x.id + '">' +
+      '<span class="num" aria-hidden="true">' + (i + 1) + '</span>' +
       '<input data-champ="nom" value="' + esc(x.nom) + '" aria-label="Nom de la tâche">' +
-      '<select data-champ="type" aria-label="Type"><option value="tournante"' + (x.type === 'tournante' ? ' selected' : '') + '>🔄 Tournante</option>' +
+      '<div class="reglages"><select data-champ="type" aria-label="Type"><option value="tournante"' + (x.type === 'tournante' ? ' selected' : '') + '>🔄 Tournante</option>' +
       '<option value="fixe"' + (x.type === 'fixe' ? ' selected' : '') + '>📌 Fixe</option></select>' +
-      '<select data-champ="assignee" aria-label="Pour qui"' + (x.type === 'fixe' ? '' : ' disabled') + '><option value="">Pour qui ?</option>' +
-      filles.map(function (f) { return '<option' + (x.assignee === f.nom ? ' selected' : '') + '>' + esc(f.nom) + '</option>'; }).join('') + '</select>' +
+      '<select data-champ="assignee" aria-label="Pour qui"' + (x.type === 'fixe' ? '' : ' disabled') + '><option value="">' + (x.type === 'fixe' ? 'Pour qui ?' : 'Tout le monde, à tour de rôle') + '</option>' +
+      filles.map(function (f) { return '<option' + (x.assignee === f.nom ? ' selected' : '') + '>' + esc(f.nom) + '</option>'; }).join('') + '</select></div>' +
       '<div class="actions"><label class="case"><input type="checkbox" data-champ="active"' + (x.active ? ' checked' : '') + '> Active</label>' +
-      '<button class="bouton" data-action="enregistrer" data-id="' + x.id + '">Enregistrer</button>' +
+      '<button class="bouton" data-action="enregistrer" data-id="' + x.id + '">💾 Enregistrer</button>' +
       '<button class="bouton leger" data-action="monter" data-id="' + x.id + '"' + (i === 0 ? ' disabled' : '') + ' aria-label="Monter">▲</button>' +
       '<button class="bouton leger" data-action="descendre" data-id="' + x.id + '"' + (i === toutesTaches.length - 1 ? ' disabled' : '') + ' aria-label="Descendre">▼</button>' +
-      '<button class="bouton danger" data-action="supprimer" data-id="' + x.id + '">Supprimer</button></div></div>';
-  }).join('') +
-    '<h3 style="margin-top:18px">Ajouter une tâche</h3><div class="ligne-admin" data-ligne="nouvelle">' +
+      '<button class="bouton danger pousse" data-action="supprimer" data-id="' + x.id + '">🗑 Supprimer</button></div></div>';
+  }).join('') + '</div>' +
+    '<div class="ajout-tache"><h3>➕ Ajouter une tâche</h3><div class="ligne-admin" data-ligne="nouvelle">' +
     '<input data-champ="nom" placeholder="Ex. : Sortir les poubelles" aria-label="Nom de la nouvelle tâche">' +
-    '<select data-champ="type" aria-label="Type"><option value="tournante">🔄 Tournante</option><option value="fixe">📌 Fixe</option></select>' +
-    '<select data-champ="assignee" disabled aria-label="Pour qui"><option value="">Pour qui ?</option>' + filles.map(function (f) { return '<option>' + esc(f.nom) + '</option>'; }).join('') + '</select>' +
-    '<div class="actions"><button class="bouton vert" data-action="ajouter">+ Ajouter</button></div></div>' +
-    '<p class="legende">🔄 Tournante : change de personne à chaque rotation. 📌 Fixe : toujours la même personne.</p></div>';
+    '<div class="reglages" style="margin-top:8px"><select data-champ="type" aria-label="Type"><option value="tournante">🔄 Tournante</option><option value="fixe">📌 Fixe</option></select>' +
+    '<select data-champ="assignee" disabled aria-label="Pour qui"><option value="">Pour qui ?</option>' + filles.map(function (f) { return '<option>' + esc(f.nom) + '</option>'; }).join('') + '</select></div>' +
+    '<div class="actions" style="margin-top:8px"><button class="bouton vert" data-action="ajouter">+ Ajouter</button></div></div></div></div>';
 
   html += '<div class="carte"><h3>Rotation</h3><div class="champ"><label for="freq">Les tâches tournent toutes les…</label>' +
     '<select id="freq">' + [1, 2, 3, 4].map(function (n) { return '<option value="' + n + '"' + (S.etat.frequence === n ? ' selected' : '') + '>' + n + ' semaine' + (n > 1 ? 's' : '') + '</option>'; }).join('') + '</select></div>' +
