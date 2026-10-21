@@ -292,6 +292,7 @@
   .applis { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }
   .applis button { min-height: 52px; border-radius: 14px; border: 2px solid var(--bord); background: var(--carte); font-weight: 600; font-size: .8em; padding: 4px; }
   @media (min-width: 1000px) and (max-height: 860px) { .applis button { min-height: 46px; } }
+  @media (min-width: 1000px) and (max-height: 700px) { .radios { grid-template-columns: repeat(3, 1fr); gap: 6px; } .radios button { font-size: .75em; padding: 4px 2px; } }
   /* Économiseur d'écran */
   .veille { position: fixed; inset: 0; z-index: 40; background: #0B0D10; color: #E9E5DC; cursor: pointer; overflow: hidden; }
   .veille-bloc { position: absolute; text-align: center; transition: left 2s ease, top 2s ease; transform: translate(-50%, -50%); }
@@ -611,7 +612,14 @@ function noterActivite() {
   if (t - S.derniere > 2000) ecrireLocal('activite', String(t));   // gardé pour la réouverture de l'appli
   S.derniere = t;
 }
+// Photo en cours (appareil photo ou galerie ouverts) : on ne déconnecte pas et on ne redessine pas la page,
+// sinon la photo choisie arrive sur un champ qui n'existe plus
+function photoEnCours() { return S.photoDepuis && Date.now() - S.photoDepuis < 5 * 60000; }
+document.addEventListener('click', function (ev) {
+  if (ev.target.closest && ev.target.closest('label[for="fichierPhoto"], #fichierPhoto')) S.photoDepuis = Date.now();
+}, true);
 function sessionExpiree() {
+  if (photoEnCours()) return false;
   var d = dureeExpiration();
   return d > 0 && Date.now() - S.derniere > d * 1000;
 }
@@ -665,6 +673,7 @@ function rendre() {
   }
   cacherBas(false);
   if ((S.vue === 'parents' || S.vue === 'profil' || S.vue === 'taches') && S.edition) return;   // ne pas effacer une saisie en cours
+  if (S.vue === 'profil' && photoEnCours()) return;   // appareil photo ouvert
   var html = entete();
   if (S.vue === 'taches') html += vueTaches();
   if (S.vue === 'semaine') html += vueSemaine();
@@ -1071,7 +1080,7 @@ document.addEventListener('click', function (ev) {
   if (a === 'emoji') { S.brouillon.emoji = b.dataset.e; S.brouillon.photo = ''; rendre(); return; }
   if (a === 'couleur') { S.brouillon.couleur = b.dataset.c; rendre(); return; }
   if (a === 'retirerPhoto') { S.brouillon.photo = ''; rendre(); return; }
-  if (a === 'annulerProfil') { S.vue = 'taches'; rendre(); return; }
+  if (a === 'annulerProfil') { S.photoDepuis = 0; S.vue = 'taches'; rendre(); return; }
   if (a === 'sauverProfil') return occupe(b, srv('modifierProfil', S.profil, S.brouillon)).then(function (ok) { if (ok) { toast('Profil enregistré'); S.vue = 'taches'; rendre(); } });
   if (a === 'changerProfil') { deconnecter(''); return; }
   if (a === 'fait') return occupe(b, srv('marquerFait', S.etat.aujourdhui, id, b.dataset.qui || S.profil, true)).then(siOk('Super ! 👏'));
@@ -1130,6 +1139,7 @@ document.addEventListener('input', function (ev) {
 document.addEventListener('change', function (ev) {
   var t = ev.target;
   if (t.id === 'fichierPhoto' && t.files && t.files[0]) {
+    S.photoDepuis = 0; noterActivite();
     preparerPhoto(t.files[0]).then(function (url) { S.brouillon.photo = url; rendre(); }).catch(function () { toast('Cette image ne marche pas'); });
     return;
   }
@@ -1193,7 +1203,9 @@ document.addEventListener('submit', function (ev) {
     ['La Première', 'https://radios.rtbf.be/laprem1ere-128.mp3'],
     ['Radio Nova', 'https://novazz.ice.infomaniak.ch/novazz-128.mp3'],
     ['FIP', 'https://icecast.radiofrance.fr/fip-midfi.mp3?id=radiofrance'],
-    ['FIP Rock', 'https://icecast.radiofrance.fr/fiprock-midfi.mp3?id=radiofrance']
+    ['FIP Rock', 'https://icecast.radiofrance.fr/fiprock-midfi.mp3?id=radiofrance'],
+    ['France Culture', 'https://icecast.radiofrance.fr/franceculture-midfi.mp3?id=radiofrance'],
+    ['France Musique', 'https://icecast.radiofrance.fr/francemusique-midfi.mp3?id=radiofrance']
   ];
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function horloge() {
