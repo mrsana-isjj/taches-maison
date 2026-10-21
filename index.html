@@ -207,13 +207,11 @@
 // Page servie par Google : google.script.run. Page servie ailleurs (GitHub Pages) : appel de l'API par fetch.
 // L'adresse du serveur n'est PAS écrite dans ce fichier (dépôt public) : elle arrive une fois par le lien
 // d'installation (…#api=IDENTIFIANT) puis reste gardée sur la tablette.
+// Identifiant lu dans l'adresse (?api=… ou #api=…) à chaque ouverture, sinon dans la mémoire de la tablette
+function extraireApi(texte) { var m = String(texte || '').match(/api=([A-Za-z0-9_-]{20,})/) || String(texte || '').match(/\/s\/([A-Za-z0-9_-]{20,})\/exec/); return m ? m[1] : null; }
 var API = (function () {
-  var m = location.hash.match(/api=([A-Za-z0-9_-]{20,})/);
-  if (m) {
-    try { localStorage.setItem('api', m[1]); } catch (e) {}
-    history.replaceState(null, '', location.pathname + location.search);   // efface l'identifiant de la barre d'adresse
-    return m[1];
-  }
+  var id = extraireApi(location.search) || extraireApi(location.hash);
+  if (id) { try { localStorage.setItem('api', id); } catch (e) {} return id; }
   try { return localStorage.getItem('api'); } catch (e) { return null; }
 })();
 function urlApi() { return /^https?:/.test(API) ? API : 'https://script.google.com/macros/s/' + API + '/exec'; }
@@ -334,8 +332,11 @@ function erreur(e) { toast((e && e.message) ? e.message : 'Oups, réessaie'); }
 function charger() {
   return srv('getEtat').then(appliquer).catch(function (e) {
     if (e && e.message === 'non-configure') {
-      document.getElementById('app').innerHTML = '<div class="carte vide" style="margin-top:40px"><h2>Appli pas encore installée sur cet appareil</h2>' +
-        '<p>Ouvre le lien d\'installation donné par les parents (ou scanne le QR code).</p></div>';
+      if (document.getElementById('lienInstall')) return;   // ne pas effacer une saisie en cours
+      document.getElementById('app').innerHTML = '<div class="carte" style="margin-top:40px"><h2>Appli pas encore installée sur cet appareil</h2>' +
+        '<p>Colle ici le lien d\'installation donné par les parents :</p>' +
+        '<form data-form="installer"><div class="champ"><input id="lienInstall" autocomplete="off" placeholder="https://…api=…" aria-label="Lien d\'installation"></div>' +
+        '<button class="bouton" type="submit">Installer</button></form></div>';
       return;
     }
     toast('Pas de connexion. Vérifie le Wi-Fi.');
@@ -821,6 +822,12 @@ document.addEventListener('submit', function (ev) {
       if (membre(S.profil).role === 'parent') S.authParent = { nom: S.profil, code: nv };
       toast('Code enregistré 🔒');
     });
+  }
+  if (f.dataset.form === 'installer') {
+    var id = extraireApi(document.getElementById('lienInstall').value);
+    if (!id) { toast('Lien incomplet : il doit contenir api=…'); return; }
+    API = id; try { localStorage.setItem('api', id); } catch (e2) {}
+    charger();
   }
   if (f.dataset.form === 'pin') {
     var pin = document.getElementById('pin').value;
