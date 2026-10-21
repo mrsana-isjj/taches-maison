@@ -998,8 +998,10 @@ document.addEventListener('submit', function (ev) {
   lecteur.addEventListener('ended', function () { if (enCours !== null) jouer(enCours); });
   document.getElementById('autresRadios').addEventListener('click', function () {
     if (enCours !== null) arreter();   // évite deux radios en même temps
-    if (window.fully && typeof fully.startApplication === 'function') { fully.startApplication(APPLI_RADIO); return; }
-    location.href = 'intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=' + APPLI_RADIO + ';end';
+    // Même forme de lien que celle qui ouvrait bien l'appli sur la tablette (page d'accueil de radio.fr)
+    var intent = 'intent://www.radio.fr/#Intent;scheme=https;package=' + APPLI_RADIO + ';end';
+    if (window.fully && typeof fully.startIntent === 'function') { fully.startIntent(intent); return; }
+    location.href = intent;
   });
   afficherRadios();
 })();
