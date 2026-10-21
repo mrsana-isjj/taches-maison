@@ -260,7 +260,7 @@
 <aside class="cote" id="cote" aria-label="Heure, météo et radio">
   <div class="bloc"><div class="horloge" id="horloge">--:--</div><div class="horloge-date" id="horlogeDate"></div></div>
   <div class="bloc"><h3>Météo · Rivière</h3><div id="meteo" class="legende">Chargement…</div></div>
-  <div class="bloc"><h3>Radio · radio.fr</h3><div class="radios" id="radios"></div>
+  <div class="bloc"><h3 id="radioTitre">Radio</h3><div class="radios" id="radios"></div><audio id="lecteur" preload="none"></audio>
     <button class="bouton leger" id="autresRadios" style="width:100%;margin-top:8px">📱 Autres radios</button></div>
 </aside>
 <div class="saisie cache" id="saisie">
@@ -919,12 +919,12 @@ document.addEventListener('submit', function (ev) {
 /* ===== Colonne de droite : heure, météo (Open-Meteo, sans compte), radio RTBF ===== */
 (function () {
   var COORD = { lat: 50.357, lon: 4.874 };   // Rivière (Profondeville)
-  // Présélections : pages des stations sur radio.fr, ouvertes dans l'appli radio.fr (de.radio.android)
+  // Présélections : lues directement dans la page (Fully Kiosk reste au premier plan)
   var RADIOS = [
-    ['La Première', 'rtbflapremiere'],
-    ['Radio Nova', 'radionova'],
-    ['FIP', 'fip'],
-    ['FIP Rock', 'fipautourdurock']
+    ['La Première', 'https://radios.rtbf.be/laprem1ere-128.mp3'],
+    ['Radio Nova', 'https://novazz.ice.infomaniak.ch/novazz-128.mp3'],
+    ['FIP', 'https://icecast.radiofrance.fr/fip-midfi.mp3?id=radiofrance'],
+    ['FIP Rock', 'https://icecast.radiofrance.fr/fiprock-midfi.mp3?id=radiofrance']
   ];
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function horloge() {
@@ -967,22 +967,37 @@ document.addEventListener('submit', function (ev) {
   meteo(); setInterval(meteo, 30 * 60 * 1000);
 
   var APPLI_RADIO = 'de.radio.android';
-  function ouvrirDansRadioFr(chemin) {
-    // Lien « intent » : Android ouvre la page dans l'appli radio.fr (Fully Kiosk : réglage « Open Other URL Schemes » à activer)
-    var intent = 'intent://www.radio.fr/' + chemin + '#Intent;scheme=https;package=' + APPLI_RADIO + ';end';
-    if (window.fully && typeof fully.startIntent === 'function') { fully.startIntent(intent); return; }
-    location.href = intent;
-  }
+  var lecteur = document.getElementById('lecteur'), enCours = null, essais = 0;
+  function titre(t) { document.getElementById('radioTitre').textContent = t; }
   function afficherRadios() {
     document.getElementById('radios').innerHTML = RADIOS.map(function (r, i) {
-      return '<button data-radio="' + i + '">📻 ' + r[0] + '</button>';
+      return '<button data-radio="' + i + '" class="' + (enCours === i ? 'joue' : '') + '">' + (enCours === i ? '⏹ ' : '📻 ') + r[0] + '</button>';
     }).join('');
+  }
+  function arreter() {
+    lecteur.pause(); lecteur.removeAttribute('src'); lecteur.load();
+    enCours = null; titre('Radio'); afficherRadios();
+  }
+  function jouer(i) {
+    enCours = i; afficherRadios(); titre('Connexion à ' + RADIOS[i][0] + '…');
+    lecteur.src = RADIOS[i][1] + (RADIOS[i][1].indexOf('?') < 0 ? '?' : '&') + 't=' + Date.now();   // toujours le direct
+    lecteur.play().then(function () { essais = 0; titre('🔊 ' + RADIOS[i][0] + ' · touche pour arrêter'); })
+      .catch(function () { if (enCours === i) { enCours = null; afficherRadios(); titre('Impossible de lancer ' + RADIOS[i][0]); } });
   }
   document.getElementById('radios').addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-radio]'); if (!b) return;
-    ouvrirDansRadioFr('s/' + RADIOS[Number(b.dataset.radio)][1]);
+    var i = Number(b.dataset.radio);
+    if (enCours === i) arreter(); else { essais = 0; jouer(i); }
   });
+  // Coupure réseau : on relance la même station (3 essais)
+  lecteur.addEventListener('error', function () {
+    if (enCours === null || !lecteur.getAttribute('src')) return;
+    if (essais < 3) { essais++; var i = enCours; setTimeout(function () { if (enCours === i) jouer(i); }, 3000); }
+    else { enCours = null; afficherRadios(); titre('Radio coupée (connexion ?)'); }
+  });
+  lecteur.addEventListener('ended', function () { if (enCours !== null) jouer(enCours); });
   document.getElementById('autresRadios').addEventListener('click', function () {
+    if (enCours !== null) arreter();   // évite deux radios en même temps
     if (window.fully && typeof fully.startApplication === 'function') { fully.startApplication(APPLI_RADIO); return; }
     location.href = 'intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=' + APPLI_RADIO + ';end';
   });
