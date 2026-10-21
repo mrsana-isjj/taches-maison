@@ -268,6 +268,26 @@
   .mini .avatar { width: 24px; height: 24px; font-size: 14px; border-width: 1px !important; }
   .grille td.cellule-routine { font-size: .8em; white-space: nowrap; }
   .cellule-routine .mr { display: inline-block; margin: 0 2px; }
+  /* Météo heure par heure (fenêtre) */
+  .meteo-jours button { font: inherit; color: inherit; border: 2px solid transparent; background: var(--carte); border-radius: 12px; padding: 6px 2px; cursor: pointer; }
+  .meteo-jours button:active, .meteo-jours button:focus-visible { border-color: var(--accent); }
+  .meteo-jours .detail { display: block; font-size: .75em; color: var(--accent); font-weight: 600; }
+  .voile { position: fixed; inset: 0; background: rgba(20, 18, 12, .55); z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .fenetre { background: var(--carte); color: var(--texte); border-radius: 20px; width: min(640px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+  .fenetre-tete { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 2px solid var(--bord); }
+  .fenetre-tete h2 { margin: 0; font-size: 1.15em; }
+  .fenetre-tete .bouton { min-height: 48px; padding: 6px 16px; }
+  .heures { overflow-y: auto; padding: 6px 12px 14px; }
+  .heure-ligne { display: grid; grid-template-columns: 4.2em 2.2em 3.6em 1fr; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 12px; }
+  .heure-ligne:nth-child(even) { background: var(--fond); }
+  .heure-ligne.passee { opacity: .45; }
+  .heure-ligne.maintenant { outline: 3px solid var(--accent); }
+  .heure-ligne .h { font-weight: 700; }
+  .heure-ligne .i { font-size: 1.5em; text-align: center; }
+  .heure-ligne .t { font-weight: 700; font-size: 1.1em; }
+  .heure-ligne .p { color: var(--doux); font-size: .9em; display: flex; align-items: center; gap: 8px; }
+  .pluie-barre { flex: 0 0 70px; height: 10px; border-radius: 999px; background: var(--fond); border: 1px solid var(--bord); overflow: hidden; }
+  .pluie-barre span { display: block; height: 100%; background: var(--accent); }
   .cache { display: none !important; }
   .chargement { text-align: center; padding: 60px 0; color: var(--doux); }
 </style>
@@ -1164,11 +1184,14 @@ document.addEventListener('submit', function (ev) {
     if (c <= 86) return ['🌨️', 'Averses de neige'];
     return ['⛈️', 'Orage'];
   }
+  var donneesMeteo = null;
   function meteo() {
     fetch('https://api.open-meteo.com/v1/forecast?latitude=' + COORD.lat + '&longitude=' + COORD.lon +
-      '&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Europe%2FBrussels&forecast_days=3')
+      '&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max' +
+      '&hourly=temperature_2m,weather_code,precipitation_probability,precipitation,is_day&timezone=Europe%2FBrussels&forecast_days=3')
       .then(function (r) { return r.json(); })
       .then(function (m) {
+        donneesMeteo = m;
         var t = temps(m.current.weather_code), j = m.daily;
         var noms = ['Auj.', 'Demain', new Date(j.time[2] + 'T12:00').toLocaleDateString('fr-BE', { weekday: 'short' })];
         document.getElementById('meteo').className = '';
@@ -1176,12 +1199,56 @@ document.addEventListener('submit', function (ev) {
           '<div class="meteo-maint"><span class="meteo-ico">' + t[0] + '</span><div><div class="meteo-temp">' + Math.round(m.current.temperature_2m) + '°</div>' +
           '<div class="legende" style="margin:2px 0 0">' + t[1] + ' · pluie ' + j.precipitation_probability_max[0] + ' %</div></div></div>' +
           '<div class="meteo-jours">' + j.time.map(function (x, i) {
-            return '<div><span>' + noms[i] + '</span><span class="ico">' + temps(j.weather_code[i])[0] + '</span><b>' + Math.round(j.temperature_2m_max[i]) + '°</b> / ' + Math.round(j.temperature_2m_min[i]) + '°</div>';
+            return '<button type="button" data-meteo-jour="' + i + '" aria-label="Météo heure par heure : ' + noms[i] + '"><span>' + noms[i] + '</span><span class="ico">' + temps(j.weather_code[i])[0] + '</span><b>' + Math.round(j.temperature_2m_max[i]) + '°</b> / ' + Math.round(j.temperature_2m_min[i]) + '°' +
+              (i === 0 ? '<span class="detail">heure par heure</span>' : '') + '</button>';
           }).join('') + '</div>';
+        if (document.getElementById('fenetreMeteo')) ouvrirHeures(Number(document.getElementById('fenetreMeteo').dataset.jour));   // mise à jour si ouverte
       })
       .catch(function () { document.getElementById('meteo').textContent = 'Météo indisponible pour le moment'; });
   }
   meteo(); setInterval(meteo, 30 * 60 * 1000);
+
+  // Fenêtre : détail heure par heure d'un jour (0 = aujourd'hui)
+  function fermerHeures() { var f = document.getElementById('fenetreMeteo'); if (f) f.remove(); }
+  function ouvrirHeures(i) {
+    var m = donneesMeteo; if (!m || !m.hourly) return;
+    var jour = m.daily.time[i], h = m.hourly, maintenant = new Date();
+    var cle = maintenant.getFullYear() + '-' + pad(maintenant.getMonth() + 1) + '-' + pad(maintenant.getDate()) + 'T' + pad(maintenant.getHours());
+    var titre = i === 0 ? "Aujourd'hui" : new Date(jour + 'T12:00').toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+    var lignes = '';
+    h.time.forEach(function (t, k) {
+      if (t.slice(0, 10) !== jour) return;
+      var ico = temps(h.weather_code[k])[0];
+      if (!h.is_day[k] && h.weather_code[k] <= 2) ico = h.weather_code[k] === 0 ? '🌙' : '☁️';
+      var pp = h.precipitation_probability[k], mm = h.precipitation[k];
+      var classe = t.slice(0, 13) === cle ? ' maintenant' : (t.slice(0, 13) < cle ? ' passee' : '');
+      lignes += '<div class="heure-ligne' + classe + '"' + (classe === ' maintenant' ? ' id="heureMaintenant"' : '') + '>' +
+        '<span class="h">' + t.slice(11, 13) + ' h</span><span class="i" aria-hidden="true">' + ico + '</span>' +
+        '<span class="t">' + Math.round(h.temperature_2m[k]) + '°</span>' +
+        '<span class="p"><span class="pluie-barre" aria-hidden="true"><span style="width:' + (pp || 0) + '%"></span></span>' +
+        '💧 ' + (pp === null || pp === undefined ? '–' : pp + ' %') + (mm > 0 ? ' · ' + String(Math.round(mm * 10) / 10).replace('.', ',') + ' mm' : '') + '</span></div>';
+    });
+    var ancienne = document.getElementById('fenetreMeteo'), depuis = ancienne ? ancienne.dataset.ouverte : String(Date.now());
+    fermerHeures();
+    var v = document.createElement('div');
+    v.className = 'voile'; v.id = 'fenetreMeteo'; v.dataset.jour = i; v.dataset.ouverte = depuis;
+    v.innerHTML = '<div class="fenetre" role="dialog" aria-modal="true" aria-label="Météo heure par heure">' +
+      '<div class="fenetre-tete"><h2>🌦️ ' + titre + ' · heure par heure</h2><button class="bouton leger" type="button" data-fermer-meteo="1">✕ Fermer</button></div>' +
+      '<div class="heures">' + lignes + '</div></div>';
+    document.body.appendChild(v);
+    var n = document.getElementById('heureMaintenant');
+    if (n) n.scrollIntoView({ block: 'center' });
+  }
+  document.getElementById('meteo').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-meteo-jour]'); if (b) ouvrirHeures(Number(b.dataset.meteoJour));
+  });
+  document.addEventListener('click', function (ev) {
+    var f = document.getElementById('fenetreMeteo'); if (!f) return;
+    if (ev.target === f || ev.target.closest('[data-fermer-meteo]')) fermerHeures();
+  });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') fermerHeures(); });
+  // Se ferme seule après 2 minutes, pour ne pas rester ouverte sur la tablette
+  setInterval(function () { var f = document.getElementById('fenetreMeteo'); if (f && Date.now() - Number(f.dataset.ouverte) > 120000) fermerHeures(); }, 15000);
 
   var APPLI_RADIO = 'de.radio.android';
   var lecteur = document.getElementById('lecteur'), enCours = null, essais = 0;
