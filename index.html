@@ -288,6 +288,9 @@
   .heure-ligne .p { color: var(--doux); font-size: .9em; display: flex; align-items: center; gap: 8px; }
   .pluie-barre { flex: 0 0 70px; height: 10px; border-radius: 999px; background: var(--fond); border: 1px solid var(--bord); overflow: hidden; }
   .pluie-barre span { display: block; height: 100%; background: var(--accent); }
+  .applis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  .applis button { min-height: 52px; border-radius: 14px; border: 2px solid var(--bord); background: var(--carte); font-weight: 600; font-size: .8em; padding: 4px; }
+  @media (min-width: 1000px) and (max-height: 860px) { .applis button { min-height: 46px; } }
   .cache { display: none !important; }
   .chargement { text-align: center; padding: 60px 0; color: var(--doux); }
 </style>
@@ -298,7 +301,11 @@
   <div class="bloc"><div class="horloge" id="horloge">--:--</div><div class="horloge-date" id="horlogeDate"></div></div>
   <div class="bloc"><h3>Météo · Rivière</h3><div id="meteo" class="legende">Chargement…</div></div>
   <div class="bloc"><h3 id="radioTitre">Radio</h3><div class="radios" id="radios"></div><audio id="lecteur" preload="none"></audio>
-    <button class="bouton leger" id="autresRadios" style="width:100%;margin-top:8px">📱 Autres radios</button></div>
+    <div class="applis">
+      <button data-appli="radio" aria-label="Autres radios (appli radio.fr)">📱 radio.fr</button>
+      <button data-appli="qobuz" aria-label="Ouvrir Qobuz">🎵 Qobuz</button>
+      <button data-appli="ytmusic" aria-label="Ouvrir YouTube Music">▶️ YT Music</button>
+    </div></div>
 </aside>
 <div class="saisie cache" id="saisie">
   <form id="formMessage" autocomplete="off">
@@ -1280,10 +1287,17 @@ document.addEventListener('submit', function (ev) {
     else { enCours = null; afficherRadios(); titre('Radio coupée (connexion ?)'); }
   });
   lecteur.addEventListener('ended', function () { if (enCours !== null) jouer(enCours); });
-  document.getElementById('autresRadios').addEventListener('click', function () {
-    if (enCours !== null) arreter();   // évite deux radios en même temps
-    // Même forme de lien que celle qui ouvrait bien l'appli sur la tablette (page d'accueil de radio.fr)
-    var intent = 'intent://www.radio.fr/#Intent;scheme=https;package=' + APPLI_RADIO + ';end';
+  // Applis de musique : même forme de lien que celle qui ouvre bien radio.fr sur la tablette
+  var APPLIS = {
+    radio:   { site: 'www.radio.fr',      paquet: APPLI_RADIO },
+    qobuz:   { site: 'open.qobuz.com',    paquet: 'com.qobuz.music' },
+    ytmusic: { site: 'music.youtube.com', paquet: 'com.google.android.apps.youtube.music' }
+  };
+  document.querySelector('.applis').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-appli]'); if (!b) return;
+    var a = APPLIS[b.dataset.appli];
+    if (enCours !== null) arreter();   // évite deux musiques en même temps
+    var intent = 'intent://' + a.site + '/#Intent;scheme=https;package=' + a.paquet + ';end';
     if (window.fully && typeof fully.startIntent === 'function') { fully.startIntent(intent); return; }
     location.href = intent;
   });
