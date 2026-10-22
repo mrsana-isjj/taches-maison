@@ -289,7 +289,7 @@
   .heure-ligne .p { color: var(--doux); font-size: .9em; display: flex; align-items: center; gap: 8px; }
   .pluie-barre { flex: 0 0 70px; height: 10px; border-radius: 999px; background: var(--fond); border: 1px solid var(--bord); overflow: hidden; }
   .pluie-barre span { display: block; height: 100%; background: var(--accent); }
-  .applis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .applis { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }
   .applis button { min-height: 52px; border-radius: 14px; border: 2px solid var(--bord); background: var(--carte); font-weight: 600; font-size: .8em; padding: 4px; }
   @media (min-width: 1000px) and (max-height: 860px) { .applis button { min-height: 46px; } }
   @media (min-width: 1000px) and (max-height: 700px) { .radios { grid-template-columns: repeat(3, 1fr); gap: 6px; } .radios button { font-size: .75em; padding: 4px 2px; } .applis button { min-height: 40px; font-size: .75em; } .bloc h3 { margin-bottom: 6px; } }
@@ -323,8 +323,7 @@
   <div class="bloc"><h3>Météo · Rivière</h3><div id="meteo" class="legende">Chargement…</div></div>
   <div class="bloc"><h3 id="radioTitre">Radio</h3><div class="radios" id="radios"></div><audio id="lecteur" preload="none"></audio>
     <div class="applis">
-      <button data-appli="radio" aria-label="Autres radios (appli radio.fr)">📱 Autres radios</button>
-      <button data-appli="barre" aria-label="Connecter la barre de son">🔈 Barre de son</button>
+      <button data-appli="radio" aria-label="Autres radios (appli radio.fr)">📱 Autres radios (radio.fr)</button>
     </div></div>
 </aside>
 <div class="saisie cache" id="saisie">
@@ -1009,8 +1008,6 @@ function vueParents() {
       (S.codes && Object.keys(S.codes).some(function (k) { return S.codes[k]; }) ?
         '<div><button class="bouton leger" data-action="voirCodes">' + (S.voirCodes ? '🙈 Masquer les codes' : '👁 Voir les codes') + '</button></div>' : '') +
     '</div>' +
-    '<div class="champ"><label class="case"><input type="checkbox" id="reveilBarre"' + (lireLocal('reveilBarre') === '1' ? ' checked' : '') + '> ' +
-      'Sur cet appareil : connecter la barre de son en lançant une radio (passage de 2 secondes par radio.fr)</label></div>' +
     '<div class="champ"><label for="veilleDelai">Économiseur d\'écran (grande horloge) après</label><select id="veilleDelai">' +
       [[1, '1 minute sans toucher l\'écran'], [2, '2 minutes'], [5, '5 minutes'], [10, '10 minutes'], [15, '15 minutes'], [0, 'Jamais']].map(function (o) {
         return '<option value="' + o[0] + '"' + (delaiVeille() === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
@@ -1151,7 +1148,6 @@ document.addEventListener('change', function (ev) {
     sel.disabled = t.value !== 'fixe';
   }
   if (t.id === 'expiration') { occupe(null, srv('changerExpiration', S.pin, Number(t.value))).then(siOk('Réglage enregistré')); return; }
-  if (t.id === 'reveilBarre') { ecrireLocal('reveilBarre', t.checked ? '1' : null); toast(t.checked ? 'Réveil de la barre de son activé sur cet appareil' : 'Réveil désactivé'); return; }
   if (t.id === 'veilleDelai') { occupe(null, srv('changerVeille', S.pin, Number(t.value))).then(siOk('Réglage enregistré')); return; }
   if (t.id === 'soirJours') { occupe(null, srv('changerSoirJours', S.pin, t.value)).then(siOk('Réglage enregistré')); return; }
   if (t.id === 'seuil') { occupe(null, srv('changerSeuil', S.pin, Number(t.value))).then(siOk('Seuil mis à jour')); return; }
@@ -1304,8 +1300,7 @@ document.addEventListener('submit', function (ev) {
   function titre(t) { document.getElementById('radioTitre').textContent = t; }
   function afficherRadios() {
     document.getElementById('radios').innerHTML = RADIOS.map(function (r, i) {
-      var att = enAttente === i;
-      return '<button data-radio="' + i + '" class="' + (enCours === i || att ? 'joue' : '') + '">' + (att ? '⏳ ' : enCours === i ? '⏹ ' : '📻 ') + r[0] + '</button>';
+      return '<button data-radio="' + i + '" class="' + (enCours === i ? 'joue' : '') + '">' + (enCours === i ? '⏹ ' : '📻 ') + r[0] + '</button>';
     }).join('');
   }
   function arreter() {
@@ -1319,34 +1314,12 @@ document.addEventListener('submit', function (ev) {
       .catch(function () { if (enCours === i) { enCours = null; afficherRadios(); titre(auto ? '▶ Touche ' + RADIOS[i][0] + ' pour lancer' : 'Impossible de lancer ' + RADIOS[i][0]); } });
   }
 
-  /* Réveil de la barre de son (tablette) : après un moment sans radio, on passe 2 secondes par l'appli
-     radio.fr. La routine Samsung « radio.fr ouverte → connecter la barre de son + rouvrir Fully » fait le reste. */
-  var enAttente = null;
   function noterSon() { ecrireLocal('radioDernierSon', String(Date.now())); }
-  function reveillerPuisJouer(i, force) {
-    if (!force && lireLocal('reveilBarre') !== '1') return false;
-    if (!force && enCours !== null) return false;   // on change juste de station : la barre de son est connectée
-    noterSon(); enAttente = i; afficherRadios(); titre('🔈 Connexion à la barre de son…');
-    var parti = false, surCache = function () { if (document.hidden) parti = true; };
-    document.addEventListener('visibilitychange', surCache);
-    // Si radio.fr ne s'ouvre pas, on lance quand même la radio
-    setTimeout(function () { document.removeEventListener('visibilitychange', surCache); if (!parti && enAttente === i) { enAttente = null; if (i === -1) titre('Radio'); else jouer(i); } }, 4000);
-    var intent = 'intent://www.radio.fr/#Intent;scheme=https;package=' + APPLI_RADIO + ';end';
-    if (window.fully && typeof fully.startIntent === 'function') fully.startIntent(intent); else location.href = intent;
-    return true;
-  }
-  // Retour dans Fully : on lance la radio demandée (le temps que le Bluetooth se connecte)
-  document.addEventListener('visibilitychange', function () {
-    if (document.hidden || enAttente === null) return;
-    var i = enAttente;
-    setTimeout(function () { if (enAttente !== i) return; enAttente = null; if (i === -1) { afficherRadios(); titre('Radio · barre de son connectée ?'); } else jouer(i, true); }, 2500);
-  });
   setInterval(function () { if (enCours !== null && !lecteur.paused) noterSon(); }, 60000);
   document.getElementById('radios').addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-radio]'); if (!b) return;
     var i = Number(b.dataset.radio);
-    if (enAttente !== null) { enAttente = null; afficherRadios(); titre('Radio'); return; }
-    if (enCours === i) arreter(); else { essais = 0; if (!reveillerPuisJouer(i)) { if (enCours !== null) arreter(); jouer(i); } }
+    if (enCours === i) arreter(); else { essais = 0; if (enCours !== null) arreter(); jouer(i); }
   });
   // Coupure réseau : on relance la même station (3 essais)
   lecteur.addEventListener('error', function () {
@@ -1361,10 +1334,6 @@ document.addEventListener('submit', function (ev) {
   };
   document.querySelector('.applis').addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-appli]'); if (!b) return;
-    if (b.dataset.appli === 'barre') {   // reconnecter la barre de son à la main (routine « radio.fr ouverte »)
-      var reprise = enCours; if (enCours !== null) arreter();
-      reveillerPuisJouer(reprise === null ? -1 : reprise, true); return;
-    }
     if (enCours !== null) arreter();   // évite deux musiques en même temps
     var a = APPLIS[b.dataset.appli];
     var intent = 'intent://' + a.site + '/#Intent;scheme=https;package=' + a.paquet + ';end';
