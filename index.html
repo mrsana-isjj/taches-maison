@@ -149,6 +149,17 @@
   .retrait-form input, .retrait-form select { min-height: 52px; border-radius: 12px; border: 2px solid var(--bord); padding: 0 12px; background: var(--carte); }
   .moins { color: var(--rouge); font-weight: 700; }
   .plus { color: var(--vert); font-weight: 700; }
+  .bouton-recap { min-height: 44px; padding: 4px 14px; font-size: .85em; }
+  .titre-profils { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 22px; margin-bottom: .5em; }
+  .titre-profils h2 { margin: 0; }
+  .tableau-recap th { text-align: left; font-size: .8em; color: var(--doux); font-weight: 600; padding: 4px 8px; }
+  .tableau-recap tr.cliquable { cursor: pointer; }
+  .tableau-recap tr.cliquable:active td { background: var(--fond); }
+  .resume-recap { display: flex; gap: 14px; flex-wrap: wrap; margin: 4px 0 10px; font-size: 1.05em; }
+  .ligne-recap { display: flex; align-items: center; gap: 12px; padding: 8px 6px; border-bottom: 2px solid var(--bord); }
+  .ligne-recap:last-child { border-bottom: none; }
+  .ligne-recap .ico { font-size: 1.3em; }
+  .ligne-recap .txt { flex: 1; font-weight: 600; }
   .bonus-form { border-color: var(--vert); }
   .clavier { max-width: 360px; margin: 0 auto; text-align: center; }
   .clavier .avatar { width: 96px; height: 96px; font-size: 54px; margin: 0 auto 8px; }
@@ -294,7 +305,8 @@
   .applis { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }
   .applis button { min-height: 52px; border-radius: 14px; border: 2px solid var(--bord); background: var(--carte); font-weight: 600; font-size: .8em; padding: 4px; }
   @media (min-width: 1000px) and (max-height: 860px) { .applis button { min-height: 46px; } }
-  @media (min-width: 1000px) and (max-height: 700px) { .radios { grid-template-columns: repeat(3, 1fr); gap: 6px; } .radios button { font-size: .75em; padding: 4px 2px; } .applis button { min-height: 40px; font-size: .75em; } .bloc h3 { margin-bottom: 6px; } }
+  @media (min-width: 1000px) and (max-height: 700px) { .radios { grid-template-columns: repeat(3, 1fr); gap: 6px; } .radios button { font-size: .75em; padding: 4px 2px; } .applis button { min-height: 40px; font-size: .75em; } .bloc h3 { margin-bottom: 6px; }
+    .resume span { font-size: .8em; padding: 2px 10px; } .resume .resume-routine { gap: 6px; } .titre-profils { margin-top: 10px; margin-bottom: 4px; } .bouton-recap { min-height: 38px; } }
   /* Économiseur d'écran */
   .veille { position: fixed; inset: 0; z-index: 40; background: #0B0D10; color: #E9E5DC; cursor: pointer; overflow: hidden; }
   .veille-bloc { position: absolute; text-align: center; transition: left 2s ease, top 2s ease; transform: translate(-50%, -50%); }
@@ -714,7 +726,7 @@ function entete() {
 }
 
 function vueProfils() {
-  return tableauAccueil() + '<h2 style="margin-top:22px">Qui es-tu ?</h2><div class="profils petits">' +
+  return tableauAccueil() + '<div class="titre-profils"><h2>Qui es-tu ?</h2><button class="bouton leger bouton-recap" data-action="recapPoints">🏆 Points</button></div><div class="profils petits">' +
     S.etat.membres.map(function (m) {
       return '<button class="profil" data-action="choisirProfil" data-nom="' + esc(m.nom) + '" style="border-color:' + esc(m.couleur) + '">' +
              avatar(m.nom) + esc(m.nom) + (m.aCode ? ' 🔒' : '') + '</button>';
@@ -852,7 +864,7 @@ function vueTableauParent() {
   }).join('') : '<div class="vide">Aucune tâche.</div>') + '</div>';
 
   var filles = S.etat.membres.filter(function (m) { return m.role === 'fille'; }), seuil = S.etat.seuil || 10;
-  html += '<h2>Points</h2><div class="carte">' + filles.map(function (f) {
+  html += '<div class="ligne-qui"><h2>Points</h2><button class="bouton leger bouton-recap" data-action="recapPoints">🏆 Récapitulatif</button></div><div class="carte">' + filles.map(function (f) {
     var p = pts(f.nom);
     return '<div style="padding:8px 0"><div class="ligne-qui">' + pastille(f.nom) + '<b>⭐ ' + p + ' / ' + seuil + '</b></div>' +
       '<div class="points" style="margin-top:6px">' + barrePoints(f.nom) +
@@ -1123,6 +1135,10 @@ document.addEventListener('click', function (ev) {
     return boutons.reduce(function (p, x) { return p.then(function () { return srv('valider', autorite(), x.dataset.date, x.dataset.id, x.dataset.qui, true); }); }, Promise.resolve())
       .then(appliquer).catch(erreur);
   }
+  if (a === 'recapPoints') { ouvrirRecap(null); return; }
+  if (a === 'recapFille') { ouvrirRecap(b.dataset.nom); return; }
+  if (a === 'recapRetour') { ouvrirRecap(null); return; }
+  if (a === 'fermerRecap') { fermerRecap(); return; }
   if (a === 'voirFille') { ouvrirDetailFille(b.dataset.nom); return; }
   if (a === 'fermerDetail') { fermerDetailFille(); return; }
   if (a === 'cocherRoutine') { cocherRoutineLocal(b.dataset.moment, id); return; }
@@ -1370,6 +1386,54 @@ document.addEventListener('submit', function (ev) {
   afficherRadios();
 })();
 
+/* ===== Fenêtre : récapitulatif des points (tableau, puis détail d'une fille) ===== */
+var recapDonnees = null;
+var ICONES_POINTS = { tache: '✅', bonus: '🌟', retrait: '➖', recompense: '🎁', routine: '⏰' };
+function dateRecap(q) {
+  var d = q.length > 10 ? new Date(q) : new Date(q + 'T12:00');
+  return d.toLocaleDateString('fr-BE', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+function contenuRecap(nom) {
+  var d = recapDonnees;
+  if (!d) return '<div class="vide">Chargement…</div>';
+  if (!nom) {
+    return '<table class="tableau tableau-recap"><tr><th></th><th>Points</th><th>Gagnés</th><th>Perdus</th></tr>' + lesFilles().map(function (f) {
+      var x = d[f.nom] || { total: 0, gagne: 0, perdu: 0 };
+      return '<tr class="cliquable" data-action="recapFille" data-nom="' + esc(f.nom) + '"><td>' + pastille(f.nom) + '</td><td><b>⭐ ' + x.total + '</b></td>' +
+        '<td class="plus">+' + x.gagne + '</td><td class="moins">−' + x.perdu + '</td></tr>';
+    }).join('') + '</table><p class="legende">Touche une fille pour voir le détail. « Perdus » compte aussi les points échangés contre une récompense 🎁.</p>';
+  }
+  var x = d[nom] || { total: 0, gagne: 0, perdu: 0, evenements: [] };
+  return '<div class="resume-recap"><span>⭐ <b>' + x.total + '</b> points</span><span class="plus">+' + x.gagne + ' gagnés</span><span class="moins">−' + x.perdu + ' perdus</span></div>' +
+    (x.evenements.length ? x.evenements.map(function (e) {
+      return '<div class="ligne-recap"><span class="ico" aria-hidden="true">' + (ICONES_POINTS[e.type] || '•') + '</span><span class="txt">' + esc(e.texte) +
+        '<span class="legende" style="display:block;margin:0">' + esc(dateRecap(e.quand)) + '</span></span><b class="' + (e.points > 0 ? 'plus' : 'moins') + '">' + (e.points > 0 ? '+' : '−') + Math.abs(e.points) + '</b></div>';
+    }).join('') : '<div class="vide">Pas encore de points.</div>');
+}
+function ouvrirRecap(nom) {
+  var f = document.getElementById('fenetreRecap');
+  if (!f) {
+    f = document.createElement('div'); f.className = 'voile'; f.id = 'fenetreRecap';
+    document.body.appendChild(f);
+    recapDonnees = null;
+    srv('historiquePoints').then(function (d) { recapDonnees = d; majRecap(); }).catch(function (e) { erreur(e); fermerRecap(); });
+  }
+  f.dataset.nom = nom || ''; f.dataset.ouverte = String(Date.now());
+  majRecap();
+}
+function majRecap() {
+  var f = document.getElementById('fenetreRecap'); if (!f) return;
+  var nom = f.dataset.nom || null;
+  f.innerHTML = '<div class="fenetre" role="dialog" aria-modal="true" aria-label="Récapitulatif des points">' +
+    '<div class="fenetre-tete">' + (nom ? '<h2>' + avatar(nom) + ' ' + esc(nom) + '</h2>' : '<h2>🏆 Récapitulatif des points</h2>') +
+    '<span class="actions">' + (nom ? '<button class="bouton leger" type="button" data-action="recapRetour">◀ Tableau</button>' : '') +
+    '<button class="bouton leger" type="button" data-action="fermerRecap">✕ Fermer</button></span></div>' +
+    '<div class="detail-fille">' + contenuRecap(nom) + '</div></div>';
+}
+function fermerRecap() { var f = document.getElementById('fenetreRecap'); if (f) f.remove(); recapDonnees = null; }
+document.addEventListener('click', function (ev) { var f = document.getElementById('fenetreRecap'); if (f && ev.target === f) fermerRecap(); });
+setInterval(function () { var f = document.getElementById('fenetreRecap'); if (f && Date.now() - Number(f.dataset.ouverte) > 180000) fermerRecap(); }, 15000);
+
 /* ===== Fenêtre : ce qu'il reste à faire pour une fille (depuis l'accueil) ===== */
 function contenuDetailFille(nom) {
   var auj = S.etat.aujourdhui, html = '';
@@ -1433,7 +1497,7 @@ function ouvrirVeille() {
   if (veilleOuverte) return;
   veilleOuverte = true;
   var f = document.getElementById('fenetreMeteo'); if (f) f.remove();
-  fermerDetailFille();
+  fermerDetailFille(); fermerRecap();
   var v = document.createElement('div');
   v.className = 'veille'; v.id = 'veille'; v.setAttribute('role', 'button'); v.setAttribute('aria-label', 'Touche l\'écran pour revenir');
   v.innerHTML = '<div class="veille-bloc"></div><div class="veille-aide">Touche l\'écran pour revenir</div>';
