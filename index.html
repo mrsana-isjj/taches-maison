@@ -148,6 +148,8 @@
   .retrait-form { display: grid; gap: 8px; margin-top: 10px; padding: 12px; border-radius: 14px; background: var(--fond); border: 2px solid var(--bord); }
   .retrait-form input, .retrait-form select { min-height: 52px; border-radius: 12px; border: 2px solid var(--bord); padding: 0 12px; background: var(--carte); }
   .moins { color: var(--rouge); font-weight: 700; }
+  .plus { color: var(--vert); font-weight: 700; }
+  .bonus-form { border-color: var(--vert); }
   .clavier { max-width: 360px; margin: 0 auto; text-align: center; }
   .clavier .avatar { width: 96px; height: 96px; font-size: 54px; margin: 0 auto 8px; }
   .points-code { display: flex; justify-content: center; gap: 16px; margin: 18px 0; }
@@ -414,6 +416,14 @@ function suivi(date, id) { return S.etat.suivi[date + '|' + id] || { fait: false
 function quiFait(t, date) { var s = suivi(date, t.id); return (s.repris && s.personne) ? s.personne : t.personne; }
 function pts(nom) { return (S.etat.points || {})[nom] || 0; }
 function retraitsDe(nom) { return (S.etat.retraits || []).filter(function (r) { return r.personne === nom; }).reverse(); }
+function bonusDe(nom) { return (S.etat.bonus || []).filter(function (r) { return r.personne === nom; }).reverse(); }
+function mesBonus(nom, max) {
+  var r = bonusDe(nom).slice(0, max);
+  if (!r.length) return '';
+  return '<div style="margin-top:10px"><b style="font-size:.9em">Points bonus</b>' + r.map(function (x) {
+    return '<div class="legende"><span class="plus">+' + x.points + '</span> ' + esc(x.motif || 'bonus') + ' · ' + esc(heure(x.quand)) + '</div>';
+  }).join('') + '</div>';
+}
 function mesRetraits(nom, max) {
   var r = retraitsDe(nom).slice(0, max);
   if (!r.length) return '';
@@ -625,7 +635,7 @@ function sessionExpiree() {
 }
 function deconnecter(message) {
   S.authParent = null; S.codes = null; S.codesCharges = false; S.voirCodes = false;
-  S.profil = null; S.saisieCode = null; S.code = ''; S.retrait = null; S.edition = false; S.pin = null; S.vue = 'taches';
+  S.profil = null; S.saisieCode = null; S.code = ''; S.retrait = null; S.bonusPour = null; S.edition = false; S.pin = null; S.vue = 'taches';
   ecrireLocal('profil', null); rendre(); window.scrollTo(0, 0);
   if (message) toast(message);
 }
@@ -781,7 +791,7 @@ function vueTaches() {
   var html = '<div class="carte"><div class="points"><span class="score">⭐ ' + p + ' / ' + seuil + '</span>' + barrePoints(S.profil) + '</div>' +
     (p >= seuil ? '<div class="gagne">🎁 Tu as gagné une récompense ! Va voir papa ou maman.</div>'
                 : '<div class="legende">Encore ' + (seuil - p) + ' point' + (seuil - p > 1 ? 's' : '') + ' avant ta récompense. 1 tâche validée = +1 point · 1 routine pas faite = −1 point.</div>') +
-    mesRetraits(S.profil, 3) + mesManquees(S.profil, 3) + '</div>';
+    mesBonus(S.profil, 3) + mesRetraits(S.profil, 3) + mesManquees(S.profil, 3) + '</div>';
   html += vueMesRoutines();
 
   var miennes = actives.filter(function (t) { return t.personne === S.profil; });
@@ -847,17 +857,27 @@ function vueTableauParent() {
     return '<div style="padding:8px 0"><div class="ligne-qui">' + pastille(f.nom) + '<b>⭐ ' + p + ' / ' + seuil + '</b></div>' +
       '<div class="points" style="margin-top:6px">' + barrePoints(f.nom) +
       (p >= seuil ? '<button class="bouton vert" data-action="recompense" data-nom="' + esc(f.nom) + '">🎁 Récompense donnée</button>' : '') +
+      '<button class="bouton vert" data-action="ouvrirBonus" data-nom="' + esc(f.nom) + '">+ Bonus</button>' +
       '<button class="bouton danger" data-action="ouvrirRetrait" data-nom="' + esc(f.nom) + '"' + (p < 1 ? ' disabled' : '') + '>− Retirer</button></div>' +
+      (S.bonusPour === f.nom ? '<form class="retrait-form bonus-form" data-form="bonus" data-retrait="1">' +
+        '<label for="motifBonus">Pour quelle tâche bonus ? (elle le verra)</label>' +
+        '<input id="motifBonus" maxlength="120" placeholder="Ex. : a rangé le garage, a aidé sa sœur…">' +
+        '<select id="nbBonus" aria-label="Nombre de points">' + [1, 2, 3].map(function (n) { return '<option value="' + n + '">+' + n + ' point' + (n > 1 ? 's' : '') + '</option>'; }).join('') + '</select>' +
+        '<div class="actions"><button class="bouton vert" type="submit">Ajouter</button><button class="bouton leger" type="button" data-action="fermerBonus">Annuler</button></div></form>' : '') +
       (S.retrait === f.nom ? '<form class="retrait-form" data-form="retrait" data-retrait="1">' +
         '<label for="motifRetrait">Pourquoi ? (elle le verra)</label>' +
         '<input id="motifRetrait" maxlength="120" placeholder="Ex. : table pas nettoyée, tâche oubliée…">' +
         '<select id="nbRetrait" aria-label="Nombre de points">' + [1, 2, 3].filter(function (n) { return n <= p; }).map(function (n) { return '<option value="' + n + '">' + n + ' point' + (n > 1 ? 's' : '') + '</option>'; }).join('') + '</select>' +
         '<div class="actions"><button class="bouton danger" type="submit">Retirer</button><button class="bouton leger" type="button" data-action="fermerRetrait">Annuler</button></div></form>' : '') +
+      bonusDe(f.nom).slice(0, 3).map(function (x) {
+        return '<div class="ligne-qui legende"><span><span class="plus">+' + x.points + '</span> ' + esc(x.motif || 'bonus') + ' · ' + esc(heure(x.quand)) + '</span>' +
+          '<button class="bouton leger" style="min-height:40px;padding:4px 12px" data-action="annulerBonus" data-quand="' + esc(x.quand) + '" data-nom="' + esc(f.nom) + '">Annuler</button></div>';
+      }).join('') +
       retraitsDe(f.nom).slice(0, 3).map(function (x) {
         return '<div class="ligne-qui legende"><span><span class="moins">−' + x.points + '</span> ' + esc(x.motif || 'sans motif') + ' · ' + esc(heure(x.quand)) + '</span>' +
           '<button class="bouton leger" style="min-height:40px;padding:4px 12px" data-action="annulerRetrait" data-quand="' + esc(x.quand) + '" data-nom="' + esc(f.nom) + '">Annuler</button></div>';
       }).join('') + '</div>';
-  }).join('') + '<p class="legende">« Récompense donnée » retire ' + seuil + ' points ; les points en plus sont gardés. « Retirer » enlève des points pour une tâche pas faite ou mal faite : le motif est affiché à la fille.</p></div>';
+  }).join('') + '<p class="legende">« Récompense donnée » retire ' + seuil + ' points ; les points en plus sont gardés. « + Bonus » ajoute des points pour une tâche en plus, « Retirer » en enlève pour une tâche pas faite ou mal faite : le motif est affiché à la fille.</p></div>';
   return html;
 }
 
@@ -1087,7 +1107,10 @@ document.addEventListener('click', function (ev) {
   if (a === 'defaire') return occupe(b, srv('marquerFait', S.etat.aujourdhui, id, b.dataset.qui || S.profil, false));
   if (a === 'reprendre') { if (confirm('Reprendre « ' + b.closest('.tache').querySelector('.nom').firstChild.textContent + ' » à la place de ' + b.dataset.de + ' ?')) return occupe(b, srv('reprendreTache', id, S.profil)).then(siOk('C\'est gentil ! 💛')); return; }
   if (a === 'rendre') return occupe(b, srv('rendreTache', id, S.profil));
-  if (a === 'ouvrirRetrait') { S.retrait = b.dataset.nom; S.edition = false; rendre(); var m = document.getElementById('motifRetrait'); if (m) m.focus(); return; }
+  if (a === 'ouvrirBonus') { S.bonusPour = b.dataset.nom; S.retrait = null; S.edition = false; rendre(); var mb = document.getElementById('motifBonus'); if (mb) mb.focus(); return; }
+  if (a === 'fermerBonus') { S.bonusPour = null; S.edition = false; rendre(); return; }
+  if (a === 'annulerBonus') return occupe(b, srv('annulerBonus', autorite(), b.dataset.quand, b.dataset.nom)).then(siOk('Bonus annulé'));
+  if (a === 'ouvrirRetrait') { S.bonusPour = null; S.retrait = b.dataset.nom; S.edition = false; rendre(); var m = document.getElementById('motifRetrait'); if (m) m.focus(); return; }
   if (a === 'fermerRetrait') { S.retrait = null; S.edition = false; rendre(); return; }
   if (a === 'annulerRetrait') return occupe(b, srv('annulerRetrait', autorite(), b.dataset.quand, b.dataset.nom)).then(siOk('Retrait annulé'));
   if (a === 'recompense') { if (confirm('Récompense donnée à ' + b.dataset.nom + ' ?')) return occupe(b, srv('donnerRecompense', autorite(), b.dataset.nom)).then(siOk('Bravo ' + b.dataset.nom + ' ! 🎁')); return; }
@@ -1163,6 +1186,10 @@ document.addEventListener('submit', function (ev) {
     if (!texte) return;
     champ.value = '';
     srv('envoyerMessage', S.profil, texte).then(appliquer).catch(function (e) { champ.value = texte; erreur(e); });
+  }
+  if (f.dataset.form === 'bonus') {
+    var nomB = S.bonusPour, nb = Number(document.getElementById('nbBonus').value), motifB = document.getElementById('motifBonus').value;
+    occupe(f.querySelector('button[type=submit]'), srv('donnerBonus', autorite(), nomB, nb, motifB)).then(function (ok) { if (ok) { S.bonusPour = null; rendre(); toast('+' + nb + ' point' + (nb > 1 ? 's' : '') + ' pour ' + nomB + ' 🌟'); } });
   }
   if (f.dataset.form === 'retrait') {
     var nom = S.retrait, n = Number(document.getElementById('nbRetrait').value), motif = document.getElementById('motifRetrait').value;
