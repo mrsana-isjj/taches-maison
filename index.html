@@ -221,7 +221,7 @@
   .radios button { min-height: 56px; border-radius: 14px; border: 2px solid var(--bord); background: var(--carte); font-weight: 600; font-size: .85em; padding: 6px; }
   .radios button.joue { background: var(--accent); color: #fff; border-color: var(--accent); }
   .radio-etat { margin-top: 8px; font-size: .85em; color: var(--doux); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  /* Espace parents : liste des tâches, une carte par tâche */
+  /* Paramètres : liste des tâches, une carte par tâche */
   .liste-taches { display: grid; gap: 12px; }
   .liste-taches .ligne-admin { display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; align-items: center;
     padding: 14px; border: 2px solid var(--bord); border-left: 10px solid var(--accent); border-radius: 16px; background: var(--carte); }
@@ -350,7 +350,7 @@
   <button data-vue="taches"><span class="ico">✅</span>Mes tâches</button>
   <button data-vue="semaine"><span class="ico">📅</span>Semaine</button>
   <button data-vue="messages"><span class="ico">💬</span>Messages<span class="badge cache" id="badge"></span></button>
-  <button data-vue="parents"><span class="ico">🔒</span>Parents</button>
+  <button data-vue="parents"><span class="ico">⚙️</span>Paramètres</button>
 </div></nav>
 
 <script>
@@ -647,7 +647,7 @@ function sessionExpiree() {
 }
 function deconnecter(message) {
   S.authParent = null; S.codes = null; S.codesCharges = false; S.voirCodes = false;
-  S.profil = null; S.saisieCode = null; S.code = ''; S.retrait = null; S.bonusPour = null; S.edition = false; S.pin = null; S.vue = 'taches';
+  S.profil = null; S.saisieCode = null; S.saisiePin = false; S.code = ''; S.retrait = null; S.bonusPour = null; S.edition = false; S.pin = null; S.vue = 'taches';
   ecrireLocal('profil', null); rendre(); window.scrollTo(0, 0);
   if (message) toast(message);
 }
@@ -690,7 +690,7 @@ function rendre() {
   var nomsValides = S.etat.membres.map(function (m) { return m.nom; });
   if (!S.profil || nomsValides.indexOf(S.profil) < 0) {
     S.profil = null;
-    app.innerHTML = (S.saisieCode && nomsValides.indexOf(S.saisieCode) >= 0) ? vueClavier() : vueProfils();
+    app.innerHTML = (S.saisieCode && nomsValides.indexOf(S.saisieCode) >= 0) ? (S.saisiePin ? vueCodeParents() : vueClavier()) : vueProfils();
     cacherBas(true); return;
   }
   cacherBas(false);
@@ -769,6 +769,14 @@ function vueClavier() {
       if (k === 'efface') return '<button data-action="toucheCode" data-k="efface" aria-label="Effacer">⌫</button>';
       return '<button data-action="toucheCode" data-k="' + k + '">' + k + '</button>';
     }).join('') + '</div><p class="legende">Code oublié ? Demande à papa ou maman de l\'effacer.</p></div>';
+}
+// Entrée d'un parent qui n'a pas encore de code sur son profil
+function vueCodeParents() {
+  return '<div class="clavier">' + avatar(S.saisieCode) + '<h2>' + esc(S.saisieCode) + '</h2>' +
+    '<form data-form="entreeParent"><div class="champ"><label for="codeParentsEntree">Tape le code parents</label>' +
+    '<input id="codeParentsEntree" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" style="text-align:center;font-size:1.4em;letter-spacing:.3em"></div>' +
+    '<div class="actions" style="justify-content:center"><button class="bouton" type="submit">Entrer</button><button class="bouton leger" type="button" data-action="annulerCode">Retour</button></div></form>' +
+    '<p class="legende">Astuce : crée ton propre code secret dans ton profil (touche ton prénom en haut) ; ensuite, il suffira de taper tes 4 chiffres.</p></div>';
 }
 function connecter(nom) { noterActivite(); ecrireLocal('activite', String(S.derniere)); S.profil = nom; S.saisieCode = null; S.code = ''; ecrireLocal('profil', nom); S.vue = 'taches'; rendre(); }
 
@@ -985,7 +993,7 @@ function vueMessages() {
 
 function vueParents() {
   if (!S.pin) {
-    return '<h2>Espace parents</h2><div class="carte"><form data-form="pin"><div class="champ"><label for="pin">Code parents</label>' +
+    return '<h2>Paramètres</h2><div class="carte"><form data-form="pin"><div class="champ"><label for="pin">Code parents</label>' +
       '<input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off"></div>' +
       '<button class="bouton" type="submit">Entrer</button></form>' +
       '<p class="legende">Ici : gestion de l\'appli (tâches, rotation, réglages). La validation et les points sont sur la page de chaque parent.</p></div>';
@@ -995,7 +1003,7 @@ function vueParents() {
     srv('codesDesFilles', S.pin).then(function (c) { S.codes = c; if (S.vue === 'parents' && !S.edition) rendre(); }).catch(function () { S.codesCharges = false; });
   }
   var filles = S.etat.membres.filter(function (m) { return m.role === 'fille'; });
-  var html = '<div class="entete"><h2 style="margin:0">Espace parents</h2><button class="bouton leger" data-action="sortir">Fermer 🔒</button></div>';
+  var html = '<div class="entete"><h2 style="margin:0">⚙️ Paramètres</h2><button class="bouton leger" data-action="sortir">Fermer 🔒</button></div>';
   var toutesTaches = S.etat.taches.slice().sort(function (a, b) { return a.ordre - b.ordre; });
   html += '<div class="carte"><h3>Les tâches</h3>' +
     '<div class="legende-couleurs"><span class="lt">🔄 Tournante : change de personne à chaque rotation</span><span class="lf">📌 Fixe : toujours la même personne</span></div>' +
@@ -1081,14 +1089,16 @@ document.addEventListener('click', function (ev) {
   if (b.dataset.vue) { S.codes = null; S.codesCharges = false; S.voirCodes = false; S.vue = b.dataset.vue; S.edition = false; rendre(); window.scrollTo(0, S.vue === 'messages' ? document.body.scrollHeight : 0); return; }
   var a = b.dataset.action, id = b.dataset.id;
   if (a === 'choisirProfil') {
-    if (membre(b.dataset.nom).aCode) { S.saisieCode = b.dataset.nom; S.code = ''; S.secoue = false; rendre(); return; }
+    if (membre(b.dataset.nom).aCode) { S.saisieCode = b.dataset.nom; S.saisiePin = false; S.code = ''; S.secoue = false; rendre(); return; }
+    // Parent sans code de profil : on demande le code parents, pour avoir les mêmes droits qu'un parent avec code
+    if (membre(b.dataset.nom).role === 'parent') { S.saisieCode = b.dataset.nom; S.saisiePin = true; rendre(); var cp = document.getElementById('codeParentsEntree'); if (cp) cp.focus(); return; }
     // Vérifie quand même auprès du serveur (un code a pu être créé sur une autre tablette)
     var nomChoisi = b.dataset.nom;
     srv('entrerProfil', nomChoisi, '').then(function () { connecter(nomChoisi); })
       .catch(function () { S.saisieCode = nomChoisi; S.code = ''; S.secoue = false; rendre(); charger(); });
     return;
   }
-  if (a === 'annulerCode') { S.saisieCode = null; S.code = ''; rendre(); return; }
+  if (a === 'annulerCode') { S.saisieCode = null; S.saisiePin = false; S.code = ''; rendre(); return; }
   if (a === 'toucheCode') {
     S.secoue = false;
     if (b.dataset.k === 'efface') S.code = S.code.slice(0, -1);
@@ -1126,7 +1136,10 @@ document.addEventListener('click', function (ev) {
   if (a === 'fermerRetrait') { S.retrait = null; S.edition = false; rendre(); return; }
   if (a === 'annulerRetrait') return occupe(b, srv('annulerRetrait', autorite(), b.dataset.quand, b.dataset.nom)).then(siOk('Retrait annulé'));
   if (a === 'recompense') { if (confirm('Récompense donnée à ' + b.dataset.nom + ' ?')) return occupe(b, srv('donnerRecompense', autorite(), b.dataset.nom)).then(siOk('Bravo ' + b.dataset.nom + ' ! 🎁')); return; }
-  if (a === 'sortir') { S.pin = null; S.codes = null; S.codesCharges = false; S.voirCodes = false; S.edition = false; rendre(); return; }
+  if (a === 'sortir') {   // un parent garde ses droits de validation sur sa page ; sinon on oublie le code
+    if (estParent()) S.vue = 'taches'; else S.pin = null;
+    S.codes = null; S.codesCharges = false; S.voirCodes = false; S.edition = false; rendre(); window.scrollTo(0, 0); return;
+  }
   if (a === 'valider') return occupe(b, srv('valider', autorite(), b.dataset.date, id, b.dataset.qui || '', true));
   if (a === 'devalider') return occupe(b, srv('valider', autorite(), b.dataset.date, id, '', false));
   if (a === 'toutValider') {
@@ -1226,6 +1239,12 @@ document.addEventListener('submit', function (ev) {
     if (!id) { toast('Lien incomplet : il doit contenir api=…'); return; }
     API = id; try { localStorage.setItem('api', id); } catch (e2) {}
     charger();
+  }
+  if (f.dataset.form === 'entreeParent') {
+    var qp = S.saisieCode, cpv = document.getElementById('codeParentsEntree').value;
+    srv('connexionParents', cpv).then(function () { S.pin = cpv; S.saisiePin = false; connecter(qp); })
+      .catch(function () { toast('Code parents incorrect'); var c = document.getElementById('codeParentsEntree'); if (c) { c.value = ''; c.focus(); } });
+    return;
   }
   if (f.dataset.form === 'pin') {
     var pin = document.getElementById('pin').value;
