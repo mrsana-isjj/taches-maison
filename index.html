@@ -515,7 +515,7 @@ function cocherRoutineLocal(moment, id) {
 function vueMesRoutines() {
   var ps = periodesDuJour();
   if (!ps.length) return '';
-  return '<h2>Mes routines</h2>' + (S.etat.routinesPause ? '<p class="legende" style="margin-top:-6px">⏸ Routines en pause (vacances) : pas de point en moins.</p>' : '') +
+  return '<h2>Mes routines</h2>' +
     ps.map(function (p) {
       var e = etatRoutine(p, S.profil), m = MOMENTS_LIB[p.moment], l = libEtatRoutine(e);
       var bloque = !!(e.s.valide || e.s.dispense);
@@ -535,7 +535,7 @@ function sectionRoutinesParent(auth) {
   var ps = periodesDuJour(), fl = lesFilles(), html = '', nbFinies = 0;
   var attr = function (p, nom, v) { return ' data-periode="' + p.periode + '" data-moment="' + p.moment + '" data-nom="' + esc(nom) + '" data-v="' + v + '"'; };
   if (ps.length) {
-    html += '<h2>Routines d\'aujourd\'hui' + (S.etat.routinesPause ? ' · ⏸ en pause' : '') + '</h2><div class="carte">';
+    html += '<h2>Routines d\'aujourd\'hui</h2><div class="carte">';
     ps.forEach(function (p, ip) {
       var m = MOMENTS_LIB[p.moment];
       html += '<h3' + (ip ? ' style="margin-top:14px"' : '') + '>' + m.ico + ' ' + m.nom + '</h3>' + fl.map(function (f) {
@@ -557,16 +557,7 @@ function sectionRoutinesParent(auth) {
       }).join('');
     });
     if (nbFinies > 1) html += '<button class="bouton" style="margin-top:10px" data-action="toutValiderRoutines">Valider les ' + nbFinies + ' routines finies</button>';
-    html += '<p class="legende">Les filles cochent les étapes. Une routine ni validée ni dispensée coûte 1 point le lendemain (le lundi pour le week-end).</p></div>';
-  }
-  var mq = (S.etat.manquees || []).slice(0, 12);
-  if (auth && mq.length) {
-    html += '<h2>Routines pas validées <span class="moins">(−1 point)</span></h2><div class="carte">' + mq.map(function (m) {
-      return '<div class="ligne-qui ligne-routine"><span>' + pastille(m.personne) + ' ' + MOMENTS_LIB[m.moment].ico + ' ' + esc(libPeriode(m)) +
-        (m.cochees ? '<span class="legende" style="display:block;margin:2px 0 0">' + m.cochees + ' étape' + (m.cochees > 1 ? 's' : '') + ' cochée' + (m.cochees > 1 ? 's' : '') + '</span>' : '') + '</span>' +
-        '<span class="actions"><button class="bouton leger" data-action="validerRoutine"' + attr(m, m.personne, 1) + '>✓ C\'était fait</button>' +
-        '<button class="bouton leger" data-action="dispenserRoutine"' + attr(m, m.personne, 1) + '>💤 Dispenser</button></span></div>';
-    }).join('') + '<p class="legende">Oubli de validation, malade, absente ? « C\'était fait » ou « Dispenser » rend le point.</p></div>';
+    html += '<p class="legende">Les filles cochent les étapes, vous validez la routine. Les routines ne retirent aucun point toutes seules : si besoin, utilisez « − Retirer » plus bas.</p></div>';
   }
   return html;
 }
@@ -586,7 +577,7 @@ function grilleRoutines() {
         }).join('');
         return '<td class="cellule-routine' + (j === auj ? ' jour-actuel' : '') + '">' + cell + '</td>';
       }).join('') + '</tr>';
-    }).join('') + '</table><div class="legende">☀️ matin · 🌙 soir · 🧹 week-end — ⭐ validée · ⏳ finie, à valider · ✗ pas validée (−1 point) · 💤 dispensée</div></div>';
+    }).join('') + '</table><div class="legende">☀️ matin · 🌙 soir · 🧹 week-end — ⭐ validée · ⏳ finie, à valider · ✗ pas validée · 💤 dispensée</div></div>';
 }
 
 function ligneRoutine(r) {
@@ -604,7 +595,7 @@ function optionsMoment(sel) {
 function carteAdminRoutines() {
   var tous = (S.etat.routines || []).slice().sort(function (a, b) { return a.ordre - b.ordre; });
   var jours = { matin: 'lundi → vendredi', soir: S.etat.soirJours === 'dim-jeu' ? 'dimanche → jeudi' : 'lundi → vendredi', weekend: 'une fois, samedi ou dimanche' };
-  return '<div class="carte"><h3>Les routines</h3><p class="legende" style="margin-top:0">Les filles cochent chaque étape ; un parent valide la routine entière sur sa page. Une routine ni validée ni dispensée coûte 1 point le lendemain (le lundi pour le week-end).</p>' +
+  return '<div class="carte"><h3>Les routines</h3><p class="legende" style="margin-top:0">Les filles cochent chaque étape ; un parent valide la routine entière sur sa page. Les routines ne changent pas les points : c\'est aux parents de retirer un point s\'ils le jugent utile.</p>' +
     ['matin', 'soir', 'weekend'].map(function (mo) {
       var rs = tous.filter(function (r) { return r.moment === mo; });
       return '<h3 style="margin-top:14px">' + MOMENTS_LIB[mo].ico + ' ' + MOMENTS_LIB[mo].nom + ' <span class="legende">' + jours[mo] + '</span></h3>' +
@@ -616,10 +607,7 @@ function carteAdminRoutines() {
     '<div class="actions" style="margin-top:8px"><button class="bouton vert" data-action="ajouterRoutine">+ Ajouter</button></div></div></div>' +
     '<div class="champ" style="margin-top:16px"><label for="soirJours">Routine du soir</label><select id="soirJours">' +
     '<option value="lun-ven"' + (S.etat.soirJours !== 'dim-jeu' ? ' selected' : '') + '>du lundi au vendredi</option>' +
-    '<option value="dim-jeu"' + (S.etat.soirJours === 'dim-jeu' ? ' selected' : '') + '>du dimanche au jeudi (veille d\'école)</option></select></div>' +
-    '<div class="actions" style="align-items:center">' + (S.etat.routinesPause
-      ? '<button class="bouton vert" data-action="pauseRoutines" data-v="0">▶ Reprendre les routines</button><span class="legende" style="margin:0">⏸ En pause : aucun point retiré.</span>'
-      : '<button class="bouton leger" data-action="pauseRoutines" data-v="1">⏸ Mettre en pause (vacances)</button>') + '</div></div>';
+    '<option value="dim-jeu"' + (S.etat.soirJours === 'dim-jeu' ? ' selected' : '') + '>du dimanche au jeudi (veille d\'école)</option></select></div></div>';
 }
 function lireRoutine(id) {
   var l = document.querySelector('[data-rligne="' + id + '"]');
@@ -810,8 +798,8 @@ function vueTaches() {
   var p = pts(S.profil), seuil = S.etat.seuil || 10;
   var html = '<div class="carte"><div class="points"><span class="score">⭐ ' + p + ' / ' + seuil + '</span>' + barrePoints(S.profil) + '</div>' +
     (p >= seuil ? '<div class="gagne">🎁 Tu as gagné une récompense ! Va voir papa ou maman.</div>'
-                : '<div class="legende">Encore ' + (seuil - p) + ' point' + (seuil - p > 1 ? 's' : '') + ' avant ta récompense. 1 tâche validée = +1 point · 1 routine pas faite = −1 point.</div>') +
-    mesBonus(S.profil, 3) + mesRetraits(S.profil, 3) + mesManquees(S.profil, 3) + '</div>';
+                : '<div class="legende">Encore ' + (seuil - p) + ' point' + (seuil - p > 1 ? 's' : '') + ' avant ta récompense. 1 tâche validée = +1 point.</div>') +
+    mesBonus(S.profil, 3) + mesRetraits(S.profil, 3) + '</div>';
   html += vueMesRoutines();
 
   var miennes = actives.filter(function (t) { return t.personne === S.profil; });
