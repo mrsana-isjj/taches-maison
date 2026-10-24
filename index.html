@@ -176,10 +176,12 @@
   /* Accueil : tableau du jour */
   .accueil-titre { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
   .accueil-titre h1 { font-size: 1.4em; margin: 0; }
-  .phrase-jour { flex: 1 1 100%; min-width: 0; color: var(--accent); font-weight: 600; font-size: .9em; }
-  @media (min-width: 1000px) { .accueil-titre { flex-wrap: nowrap; align-items: center; } .phrase-jour { flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+  .phrase-jour { margin-top: 14px; padding: 10px 16px; border-radius: 16px; background: var(--carte); border: 2px dashed var(--bord);
+    color: var(--accent); font-weight: 600; text-align: center; }
+  @media (min-width: 1000px) and (max-height: 700px) { .phrase-jour { margin-top: 8px; padding: 6px 12px; font-size: .9em; } }
   .oeuf-barre { position: relative; display: inline-block; opacity: .6; }
   .oeuf-barre::after { content: ''; position: absolute; left: -3px; right: -3px; top: 50%; border-top: 3px solid var(--rouge); transform: rotate(-35deg); }
+  body.sans-nav .app { padding-bottom: 16px; }
   .veille-phrase { margin-top: 14px; font-size: 1.15em; color: #CFC9BD; max-width: 80vw; }
   .resume { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
   .resume span { border-radius: 999px; padding: 4px 14px; font-weight: 600; font-size: .9em; }
@@ -708,6 +710,7 @@ function rendre() {
 
 function cacherBas(c) {
   document.getElementById('nav').classList.toggle('cache', c);
+  document.body.classList.toggle('sans-nav', c);   // accueil : pas de barre d'onglets, donc pas de marge en bas
   if (c) document.getElementById('saisie').classList.add('cache');
 }
 
@@ -723,7 +726,8 @@ function vueProfils() {
     S.etat.membres.map(function (m) {
       return '<button class="profil" data-action="choisirProfil" data-nom="' + esc(m.nom) + '" style="border-color:' + esc(m.couleur) + '">' +
              avatar(m.nom) + esc(m.nom) + (m.aCode ? ' 🔒' : '') + '</button>';
-    }).join('') + '</div>';
+    }).join('') + '</div>' +
+    '<div class="phrase-jour">💬 ' + esc(phraseDuJour(new Date())) + '</div>';
 }
 
 // Accueil : récapitulatif du jour, visible sans se connecter
@@ -746,7 +750,7 @@ function tableauAccueil() {
     return '<button class="mini" data-action="voirFille" data-nom="' + esc(f.nom) + '" aria-label="Ce qui reste à faire pour ' + esc(f.nom) + '">' + avatar(f.nom) + l.txt + '</button>';
   }).join('') + '</span>';
   return '<div class="accueil-titre"><h1>Aujourd\'hui</h1><span class="date">' + esc(dateLongue(auj)) + '</span>' +
-    '<span class="phrase-jour" title="' + esc(phraseDuJour(new Date())) + '">💬 ' + esc(phraseDuJour(new Date())) + '</span></div>' +
+    '</div>' +
     (t.length || chipR ? '<div class="resume">' + chipR + (!t.length ? '' :
       (reste ? '<span style="background:var(--fond);border:2px dashed var(--bord)">○ ' + reste + ' à faire</span>' : '<span style="background:var(--vert-fond);color:var(--vert)">🎉 Tout est fait !</span>') +
       (nbAttente ? '<span style="background:var(--jaune-fond);color:var(--jaune)">⏳ ' + nbAttente + ' à valider</span>' : '') +
