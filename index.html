@@ -176,6 +176,11 @@
   /* Accueil : tableau du jour */
   .accueil-titre { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
   .accueil-titre h1 { font-size: 1.4em; margin: 0; }
+  .phrase-jour { flex: 1 1 100%; min-width: 0; color: var(--accent); font-weight: 600; font-size: .9em; }
+  @media (min-width: 1000px) { .accueil-titre { flex-wrap: nowrap; align-items: center; } .phrase-jour { flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+  .oeuf-barre { position: relative; display: inline-block; opacity: .6; }
+  .oeuf-barre::after { content: ''; position: absolute; left: -3px; right: -3px; top: 50%; border-top: 3px solid var(--rouge); transform: rotate(-35deg); }
+  .veille-phrase { margin-top: 14px; font-size: 1.15em; color: #CFC9BD; max-width: 80vw; }
   .resume { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
   .resume span { border-radius: 999px; padding: 4px 14px; font-weight: 600; font-size: .9em; }
   .tableau { width: 100%; border-collapse: collapse; }
@@ -740,7 +745,8 @@ function tableauAccueil() {
     var l = libEtatRoutine(etatRoutine(pc, f.nom), true);
     return '<button class="mini" data-action="voirFille" data-nom="' + esc(f.nom) + '" aria-label="Ce qui reste à faire pour ' + esc(f.nom) + '">' + avatar(f.nom) + l.txt + '</button>';
   }).join('') + '</span>';
-  return '<div class="accueil-titre"><h1>Aujourd\'hui</h1><span class="date">' + esc(dateLongue(auj)) + '</span></div>' +
+  return '<div class="accueil-titre"><h1>Aujourd\'hui</h1><span class="date">' + esc(dateLongue(auj)) + '</span>' +
+    '<span class="phrase-jour" title="' + esc(phraseDuJour(new Date())) + '">💬 ' + esc(phraseDuJour(new Date())) + '</span></div>' +
     (t.length || chipR ? '<div class="resume">' + chipR + (!t.length ? '' :
       (reste ? '<span style="background:var(--fond);border:2px dashed var(--bord)">○ ' + reste + ' à faire</span>' : '<span style="background:var(--vert-fond);color:var(--vert)">🎉 Tout est fait !</span>') +
       (nbAttente ? '<span style="background:var(--jaune-fond);color:var(--jaune)">⏳ ' + nbAttente + ' à valider</span>' : '') +
@@ -1251,6 +1257,89 @@ function jourOeufs(d) {
   var j = Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - DEBUT_OEUFS) / 86400000);
   return j >= 0 && j % 2 === 0;
 }
+function oeufHtml(d) {
+  return jourOeufs(d) ? ' <span title="Jour des œufs pour nous">🥚</span>' : ' <span class="oeuf-barre" title="Œufs pour les voisins">🥚</span>';
+}
+
+/* ===== Une petite phrase positive par jour (la même sur toutes les tablettes) ===== */
+var PHRASES = [
+  "Belle journée à toute la famille !",
+  "Un sourire, ça ne coûte rien et ça fait du bien.",
+  "Aujourd'hui, dis merci à quelqu'un.",
+  "Chaque petit effort compte.",
+  "Tu as le droit de te tromper : c'est comme ça qu'on apprend.",
+  "Une pieuvre a trois cœurs.",
+  "Les abeilles dansent pour montrer où sont les fleurs.",
+  "Prends le temps de regarder le ciel aujourd'hui.",
+  "Ensemble, on va plus loin.",
+  "Une petite attention peut illuminer la journée d'une sœur.",
+  "Le miel peut se conserver pendant des années.",
+  "Aujourd'hui est une page blanche : écris-y du beau.",
+  "Rire ensemble, c'est le meilleur dessert.",
+  "Bravo pour tout ce que tu fais, même si personne ne le voit.",
+  "Les dauphins s'appellent par des sifflements bien à eux.",
+  "Respire un grand coup : tu peux y arriver.",
+  "Un câlin, ça recharge les batteries.",
+  "Les manchots se blottissent ensemble pour avoir chaud.",
+  "La gentillesse, ça se partage sans compter.",
+  "Fais une chose qui te rend fier aujourd'hui.",
+  "Les escargots peuvent dormir pendant plusieurs mois.",
+  "Pense à une chose qui t'a fait rire cette semaine.",
+  "Une maison rangée, c'est une maison où l'on respire.",
+  "Les erreurs sont la preuve que tu essaies.",
+  "Aide quelqu'un sans qu'on te le demande.",
+  "Chaque jour, on grandit un tout petit peu.",
+  "La Terre fait le tour du Soleil en un peu plus de 365 jours.",
+  "Ce soir, raconte ta journée à quelqu'un.",
+  "Tu es plus fort que tu ne le crois.",
+  "Un bon goûter et c'est reparti !",
+  "Écoute une chanson que tu aimes et chante fort.",
+  "La patience, c'est un super-pouvoir.",
+  "Les poules savent reconnaître leurs copines de basse-cour.",
+  "Aujourd'hui, essaie quelque chose de nouveau.",
+  "Un mot gentil peut changer une journée.",
+  "Range une chose, et tout semble plus léger.",
+  "Les arbres ont besoin de temps pour grandir, nous aussi.",
+  "Fais-toi confiance.",
+  "Le plus beau cadeau, c'est le temps passé ensemble.",
+  "Une étoile filante, c'est une poussière de l'espace qui brûle.",
+  "Félicite une sœur pour quelque chose qu'elle a réussi.",
+  "Lire, c'est voyager sans bouger.",
+  "Demain sera encore une nouvelle chance.",
+  "Bois un grand verre d'eau, ton corps te dit merci.",
+  "On ne perd jamais rien à être poli.",
+  "Pendant qu'on dort, le cerveau range ce qu'on a appris.",
+  "Partage ton dessert… ou au moins ton sourire !",
+  "Quand tu as fini, tu peux être fier de toi.",
+  "Les chats passent une grande partie de leur journée à dormir.",
+  "Prends soin de tes affaires, elles prennent soin de toi.",
+  "Chaque matin est une nouvelle aventure.",
+  "Faire de son mieux, c'est déjà réussir.",
+  "Une promenade dehors, ça remet de bonne humeur.",
+  "Les grands projets commencent par de petits pas.",
+  "Dis à quelqu'un que tu l'aimes.",
+  "Un arc-en-ciel naît du soleil et des gouttes de pluie.",
+  "Aujourd'hui, sois curieux de tout.",
+  "Le courage, c'est d'essayer même quand c'est difficile.",
+  "Il n'y a pas de petite victoire.",
+  "Les colibris peuvent voler en arrière.",
+  "Une famille, c'est une équipe.",
+  "Prends le temps de bien faire, pas de tout faire vite.",
+  "Ton sourire est contagieux.",
+  "Note une chose dont tu es reconnaissant aujourd'hui.",
+  "Chaque flocon de neige est fait de petits cristaux de glace.",
+  "Tout le monde a besoin d'encouragements : donne-en un !",
+  "Être gentil avec soi-même, ça compte aussi.",
+  "Après l'effort, le réconfort.",
+  "Les papillons goûtent avec leurs pattes.",
+  "Un problème partagé est déjà à moitié résolu.",
+  "Aujourd'hui, prends le temps de jouer.",
+  "Chaque jour apporte sa petite surprise."
+];
+function phraseDuJour(d) {
+  var j = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+  return PHRASES[((j % PHRASES.length) + PHRASES.length) % PHRASES.length];
+}
 
 /* ===== Colonne de droite : heure, météo (Open-Meteo, sans compte), radio RTBF ===== */
 (function () {
@@ -1268,7 +1357,7 @@ function jourOeufs(d) {
   function horloge() {
     var d = new Date();
     document.getElementById('horloge').textContent = pad(d.getHours()) + ':' + pad(d.getMinutes());
-    document.getElementById('horlogeDate').textContent = d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' }) + (jourOeufs(d) ? ' 🥚' : '');
+    document.getElementById('horlogeDate').innerHTML = esc(d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })) + oeufHtml(d);
   }
   horloge(); setInterval(horloge, 15000);
 
@@ -1490,7 +1579,8 @@ var dernierToucher = Date.now(), veilleOuverte = false, veillePos = 0;
 function contenuVeille() {
   var d = new Date(), pad2 = function (n) { return (n < 10 ? '0' : '') + n; };
   var m = window.meteoVeille, html = '<div class="veille-heure">' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + '</div>' +
-    '<div class="veille-date">' + esc(d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })) + (jourOeufs(d) ? ' 🥚' : '') + '</div>';
+    '<div class="veille-date">' + esc(d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })) + oeufHtml(d) + '</div>' +
+    '<div class="veille-phrase">💬 ' + esc(phraseDuJour(d)) + '</div>';
   if (m) html += '<div class="veille-meteo"><span class="ico">' + m.ico + '</span><b>' + m.temp + '°</b><span class="txt">' + esc(m.txt) + '<br>' + m.max + '° / ' + m.min + '° · pluie ' + m.pluie + ' %</span></div>';
   var pc = S.etat && typeof periodeEnCours === 'function' ? periodeEnCours() : null;
   if (pc) html += '<div class="veille-routine">' + MOMENTS_LIB[pc.moment].ico + ' ' + MOMENTS_LIB[pc.moment].court + lesFilles().map(function (f) {
