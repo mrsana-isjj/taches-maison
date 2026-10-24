@@ -1245,6 +1245,13 @@ document.addEventListener('submit', function (ev) {
 });
 
 
+/* ===== Œufs des poules (partagées avec les voisins) : notre jour, un jour sur deux à partir du 25 octobre 2026 ===== */
+var DEBUT_OEUFS = Date.UTC(2026, 9, 25);
+function jourOeufs(d) {
+  var j = Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - DEBUT_OEUFS) / 86400000);
+  return j >= 0 && j % 2 === 0;
+}
+
 /* ===== Colonne de droite : heure, météo (Open-Meteo, sans compte), radio RTBF ===== */
 (function () {
   var COORD = { lat: 50.357, lon: 4.874 };   // Rivière (Profondeville)
@@ -1261,7 +1268,7 @@ document.addEventListener('submit', function (ev) {
   function horloge() {
     var d = new Date();
     document.getElementById('horloge').textContent = pad(d.getHours()) + ':' + pad(d.getMinutes());
-    document.getElementById('horlogeDate').textContent = d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+    document.getElementById('horlogeDate').textContent = d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' }) + (jourOeufs(d) ? ' 🥚' : '');
   }
   horloge(); setInterval(horloge, 15000);
 
@@ -1483,7 +1490,7 @@ var dernierToucher = Date.now(), veilleOuverte = false, veillePos = 0;
 function contenuVeille() {
   var d = new Date(), pad2 = function (n) { return (n < 10 ? '0' : '') + n; };
   var m = window.meteoVeille, html = '<div class="veille-heure">' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + '</div>' +
-    '<div class="veille-date">' + esc(d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })) + '</div>';
+    '<div class="veille-date">' + esc(d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })) + (jourOeufs(d) ? ' 🥚' : '') + '</div>';
   if (m) html += '<div class="veille-meteo"><span class="ico">' + m.ico + '</span><b>' + m.temp + '°</b><span class="txt">' + esc(m.txt) + '<br>' + m.max + '° / ' + m.min + '° · pluie ' + m.pluie + ' %</span></div>';
   var pc = S.etat && typeof periodeEnCours === 'function' ? periodeEnCours() : null;
   if (pc) html += '<div class="veille-routine">' + MOMENTS_LIB[pc.moment].ico + ' ' + MOMENTS_LIB[pc.moment].court + lesFilles().map(function (f) {
