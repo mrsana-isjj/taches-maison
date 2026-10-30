@@ -221,6 +221,10 @@
   .meteo-maint { display: flex; align-items: center; gap: 12px; }
   .meteo-ico { font-size: 2.6em; line-height: 1; }
   .meteo-temp { font-size: 2.2em; font-weight: 700; line-height: 1; }
+  .lune { margin-left: auto; flex: none; text-align: center; font-size: .68em; line-height: 1.2; color: var(--doux); max-width: 6.5em; }
+  .meteo-maint > div:not(.lune) { min-width: 0; }
+  .meteo-maint .legende { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lune .ico-lune { display: block; font-size: 2.4em; line-height: 1.1; }
   .meteo-jours { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 12px; text-align: center; font-size: .85em; }
   .meteo-jours div { background: var(--carte); border-radius: 12px; padding: 6px 2px; }
   .meteo-jours .ico { font-size: 1.6em; display: block; }
@@ -1345,6 +1349,28 @@ function phraseDuJour(d) {
   return PHRASES[((j % PHRASES.length) + PHRASES.length) % PHRASES.length];
 }
 
+/* ===== Phase de la Lune (calcul astronomique, d'après la méthode de la bibliothèque SunCalc) ===== */
+function phaseLune(date) {
+  var rad = Math.PI / 180, e = rad * 23.4397, d = date.valueOf() / 86400000 - 0.5 + 2440588 - 2451545;
+  function ra(l, b) { return Math.atan2(Math.sin(l) * Math.cos(e) - Math.tan(b) * Math.sin(e), Math.cos(l)); }
+  function dec(l, b) { return Math.asin(Math.sin(b) * Math.cos(e) + Math.cos(b) * Math.sin(e) * Math.sin(l)); }
+  var M = rad * (357.5291 + 0.98560028 * d);
+  var Ls = M + rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M)) + rad * 102.9372 + Math.PI;
+  var sDec = dec(Ls, 0), sRa = ra(Ls, 0);
+  var L = rad * (218.316 + 13.176396 * d), Mm = rad * (134.963 + 13.064993 * d), F = rad * (93.272 + 13.229350 * d);
+  var l = L + rad * 6.289 * Math.sin(Mm), b = rad * 5.128 * Math.sin(F), dist = 385001 - 20905 * Math.cos(Mm);
+  var mDec = dec(l, b), mRa = ra(l, b), sDist = 149598000;
+  var phi = Math.acos(Math.sin(sDec) * Math.sin(mDec) + Math.cos(sDec) * Math.cos(mDec) * Math.cos(sRa - mRa));
+  var inc = Math.atan2(sDist * Math.sin(phi), dist - sDist * Math.cos(phi));
+  var angle = Math.atan2(Math.cos(sDec) * Math.sin(sRa - mRa), Math.sin(sDec) * Math.cos(mDec) - Math.cos(sDec) * Math.sin(mDec) * Math.cos(sRa - mRa));
+  var phase = 0.5 + 0.5 * inc * (angle < 0 ? -1 : 1) / Math.PI;   // 0 = nouvelle lune, 0,5 = pleine lune
+  var noms = [['🌑', 'Nouvelle lune'], ['🌒', 'Premier croissant'], ['🌓', 'Premier quartier'], ['🌔', 'Gibbeuse croissante'],
+              ['🌕', 'Pleine lune'], ['🌖', 'Gibbeuse décroissante'], ['🌗', 'Dernier quartier'], ['🌘', 'Dernier croissant']];
+  // Les 4 phases principales (nouvelle, quartiers, pleine) : à ± 1 jour de leur moment ; entre les deux : croissant ou gibbeuse
+  var jours = phase * 29.53, k = Math.round(jours / 7.3825), i = Math.abs(jours - k * 7.3825) <= 1 ? (2 * k) % 8 : (2 * Math.floor(jours / 7.3825) + 1) % 8;
+  return { ico: noms[i][0], nom: noms[i][1], eclairee: Math.round((1 + Math.cos(inc)) / 2 * 100), phase: phase };
+}
+
 /* ===== Colonne de droite : heure, météo (Open-Meteo, sans compte), radio RTBF ===== */
 (function () {
   var COORD = { lat: 50.357, lon: 4.874 };   // Rivière (Profondeville)
@@ -1392,7 +1418,8 @@ function phraseDuJour(d) {
         document.getElementById('meteo').className = '';
         document.getElementById('meteo').innerHTML =
           '<div class="meteo-maint"><span class="meteo-ico">' + t[0] + '</span><div><div class="meteo-temp">' + Math.round(m.current.temperature_2m) + '°</div>' +
-          '<div class="legende" style="margin:2px 0 0">' + t[1] + ' · pluie ' + j.precipitation_probability_max[0] + ' %</div></div></div>' +
+          '<div class="legende" style="margin:2px 0 0">' + t[1] + ' · pluie ' + j.precipitation_probability_max[0] + ' %</div></div>' +
+          (function () { var lu = phaseLune(new Date()); return '<div class="lune" title="' + lu.nom + ' · ' + lu.eclairee + ' % éclairée"><span class="ico-lune">' + lu.ico + '</span>' + lu.nom + '</div>'; })() + '</div>' +
           '<div class="meteo-jours">' + j.time.map(function (x, i) {
             return '<button type="button" data-meteo-jour="' + i + '" aria-label="Météo heure par heure : ' + noms[i] + '"><span>' + noms[i] + '</span><span class="ico">' + temps(j.weather_code[i])[0] + '</span><b>' + Math.round(j.temperature_2m_max[i]) + '°</b> / ' + Math.round(j.temperature_2m_min[i]) + '°' +
               (i === 0 ? '<span class="detail">heure par heure</span>' : '') + '</button>';
