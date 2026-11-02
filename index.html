@@ -218,6 +218,25 @@
   .bloc h3 { margin: 0 0 8px; font-size: .9em; color: var(--doux); text-transform: uppercase; letter-spacing: .08em; }
   .horloge { font-size: 3.4em; font-weight: 700; line-height: 1; letter-spacing: .02em; }
   .horloge-date { color: var(--doux); margin-top: 6px; }
+  /* Calendrier des anniversaires (fenêtre) */
+  .cal-corps { padding: 14px 18px 18px; overflow-y: auto; }
+  .cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .cal-nav b { font-size: 1.15em; text-transform: capitalize; text-align: center; flex: 1; }
+  .cal-nav .bouton { min-height: 44px; padding: 4px 14px; }
+  .cal-grille { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-ent { text-align: center; font-size: .75em; color: var(--doux); font-weight: 700; }
+  .cal-j { min-height: 48px; min-width: 0; border: 2px solid var(--bord); background: var(--fond); border-radius: 10px; padding: 2px; font: inherit; font-size: .85em; color: var(--texte);
+           display: flex; flex-direction: column; align-items: center; justify-content: flex-start; overflow: hidden; }
+  .cal-j.vide { border: none; background: none; }
+  .cal-j.auj { border-color: #2d6e8e; font-weight: 700; }
+  .cal-j.fete { background: #FFF1C9; border-color: #E3B341; }
+  .cal-j small { font-size: .72em; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; line-height: 1.15; }
+  .cal-liste { display: grid; gap: 6px; margin-top: 12px; }
+  .cal-ligne { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; min-height: 48px; border: 2px solid var(--bord); background: var(--fond);
+               border-radius: 12px; padding: 6px 12px; font: inherit; color: inherit; }
+  button.cal-ligne { cursor: pointer; }
+  .cal-ligne .quand { min-width: 74px; color: var(--doux); font-weight: 700; }
+  @media (max-height: 700px) { .cal-j { min-height: 38px; } .cal-liste { margin-top: 8px; } }
   /* Anniversaires : à droite de l'heure, sans ajouter de hauteur à la colonne */
   .cote > .bloc:first-child { position: relative; }
   .anniv { position: absolute; top: 12px; right: 14px; max-width: 54%; text-align: right; font-weight: 700; font-size: .85em; line-height: 1.3; }
@@ -627,6 +646,7 @@ function carteAdminRoutines() {
     '<option value="lun-ven"' + (S.etat.soirJours !== 'dim-jeu' ? ' selected' : '') + '>du lundi au vendredi</option>' +
     '<option value="dim-jeu"' + (S.etat.soirJours === 'dim-jeu' ? ' selected' : '') + '>du dimanche au jeudi (veille d\'école)</option></select></div></div>';
 }
+var ABR_MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 var NOMS_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 function ligneAnniv(x) {
   var n = function (min, max, sel) { var o = ''; for (var i = min; i <= max; i++) o += '<option value="' + i + '"' + (i === sel ? ' selected' : '') + '>' + i + '</option>'; return o; };
@@ -637,21 +657,86 @@ function ligneAnniv(x) {
     '<input data-champ="annee" type="number" inputmode="numeric" min="1900" max="2100" placeholder="Année" value="' + (x && x.annee ? x.annee : '') + '" aria-label="Année de naissance (facultatif)"></div>';
 }
 function carteAdminAnniv() {
-  var tous = (S.etat.anniversaires || []).slice().sort(function (a, b) { return a.mois - b.mois || a.jour - b.jour; });
-  return '<div class="carte"><h3>🎂 Les anniversaires</h3><p class="legende" style="margin-top:0">Le jour J, le prénom s\'affiche à côté de la date, avec l\'âge si tu indiques l\'année de naissance (facultatif).</p>' +
-    '<div class="liste-taches">' + (tous.length ? tous.map(function (x) {
-      return '<div class="ligne-admin" data-alligne="' + esc(x.id) + '">' + ligneAnniv(x) +
-        '<div class="actions"><button class="bouton" data-action="enregistrerAnniv" data-id="' + esc(x.id) + '">💾 Enregistrer</button>' +
-        '<button class="bouton danger pousse" data-action="supprimerAnniv" data-id="' + esc(x.id) + '">🗑 Supprimer</button></div></div>';
-    }).join('') : '<div class="legende">Aucun anniversaire enregistré.</div>') + '</div>' +
-    '<div class="ajout-tache"><h3>➕ Ajouter un anniversaire</h3><div class="ligne-admin" data-alligne="nouvelle">' + ligneAnniv(null) +
-    '<div class="actions" style="margin-top:8px"><button class="bouton vert" data-action="ajouterAnniv">+ Ajouter</button></div></div></div></div>';
+  var n = (S.etat.anniversaires || []).length;
+  return '<div class="carte"><h3>🎂 Les anniversaires</h3><p class="legende" style="margin-top:0">' + n + ' enregistré' + (n > 1 ? 's' : '') +
+    '. Dans le calendrier, touche une personne pour la modifier, ou un jour libre pour en ajouter une.</p>' +
+    '<button class="bouton" data-action="ouvrirCalendrier">📅 Ouvrir le calendrier</button></div>';
 }
-function lireAnniv(id) {
-  var l = document.querySelector('[data-alligne="' + id + '"]');
+
+/* ===== Calendrier des anniversaires (fenêtre, mois par mois) ===== */
+var cal = null;   // { a: année, m: mois 0-11, edit: null | {id, nom, jour, mois, annee} }
+function annivsDuMois(a, m) {
+  var bis = (a % 4 === 0 && a % 100 !== 0) || a % 400 === 0;
+  return ((S.etat && S.etat.anniversaires) || []).filter(function (x) {
+    return x.mois === m + 1 || false;
+  }).map(function (x) {
+    var j = (x.mois === 2 && x.jour === 29 && !bis) ? 28 : x.jour;
+    return { id: x.id, nom: x.nom, jour: j, jourSaisi: x.jour, mois: x.mois, annee: x.annee, age: x.annee ? a - x.annee : 0 };
+  }).sort(function (p, q) { return p.jour - q.jour || (p.nom < q.nom ? -1 : 1); });
+}
+function ouvrirCal() {
+  var d = new Date();
+  cal = { a: d.getFullYear(), m: d.getMonth(), edit: null };
+  var f = document.getElementById('fenetreCal');
+  if (!f) { f = document.createElement('div'); f.className = 'voile'; f.id = 'fenetreCal'; document.body.appendChild(f); }
+  majCal();
+}
+function fermerCal() { var f = document.getElementById('fenetreCal'); if (f) f.remove(); cal = null; }
+function majCal() {
+  var f = document.getElementById('fenetreCal'); if (!f || !cal) return;
+  f.dataset.ouverte = String(Date.now());
+  var peut = !!autorite(), corps, titre;
+  if (cal.edit) {
+    var e = cal.edit;
+    titre = e.id ? 'Modifier un anniversaire' : 'Nouvel anniversaire';
+    corps = '<div class="ligne-admin" data-alligne="edit">' + ligneAnniv(e) +
+      '<div class="actions" style="margin-top:8px"><button class="bouton vert" data-action="calEnregistrer">💾 Enregistrer</button>' +
+      '<button class="bouton leger" data-action="calAnnuler">Annuler</button>' +
+      (e.id ? '<button class="bouton danger pousse" data-action="calSupprimer">🗑 Supprimer</button>' : '') + '</div></div>';
+  } else {
+    var d = new Date(), aujJ = (d.getFullYear() === cal.a && d.getMonth() === cal.m) ? d.getDate() : 0;
+    var liste = annivsDuMois(cal.a, cal.m), parJour = {};
+    liste.forEach(function (x) { (parJour[x.jour] = parJour[x.jour] || []).push(x); });
+    var dec = (new Date(cal.a, cal.m, 1).getDay() + 6) % 7, nb = new Date(cal.a, cal.m + 1, 0).getDate(), cases = '';
+    titre = '🎂 Anniversaires';
+    ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'].forEach(function (j) { cases += '<div class="cal-ent">' + j + '</div>'; });
+    for (var i = 0; i < dec; i++) cases += '<div class="cal-j vide"></div>';
+    for (var j = 1; j <= nb; j++) {
+      var p = parJour[j] || [];
+      var contenu = '<span>' + j + '</span>' + (p.length ? '<small>🎂 ' + esc(p[0].nom) + '</small>' + (p.length > 1 ? '<small>+ ' + (p.length - 1) + '</small>' : '') : '');
+      cases += '<' + (peut ? 'button type="button" data-action="calJour" data-jour="' + j + '"' : 'div') + ' class="cal-j' + (p.length ? ' fete' : '') + (j === aujJ ? ' auj' : '') + '">' + contenu + '</' + (peut ? 'button' : 'div') + '>';
+    }
+    corps = '<div class="cal-nav"><button class="bouton leger" data-action="calMois" data-sens="-1" aria-label="Mois précédent">◀</button>' +
+      '<b>' + esc(new Date(cal.a, cal.m, 1).toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' })) + '</b>' +
+      '<button class="bouton leger" data-action="calMois" data-sens="1" aria-label="Mois suivant">▶</button></div>' +
+      '<div class="cal-grille">' + cases + '</div><div class="cal-liste">' +
+      (liste.length ? liste.map(function (x) {
+        var txt = '<span class="quand">' + x.jour + ' ' + ABR_MOIS[cal.m] + '</span><b>' + esc(x.nom) + '</b>' +
+          (x.age > 0 ? '<span class="legende" style="margin:0">' + x.age + (x.age > 1 ? ' ans' : ' an') + '</span>' : '');
+        return peut ? '<button type="button" class="cal-ligne" data-action="calEdit" data-id="' + esc(x.id) + '">' + txt + '<span class="pousse" style="margin-left:auto">✏️</span></button>'
+                    : '<div class="cal-ligne">' + txt + '</div>';
+      }).join('') : '<div class="legende" style="margin:0">Aucun anniversaire ce mois-ci.</div>') + '</div>' +
+      (peut ? '<div class="actions" style="margin-top:10px"><button class="bouton vert" data-action="calEdit" data-id="">➕ Ajouter</button>' +
+              '<button class="bouton leger" data-action="calAujourdhui">Aujourd\'hui</button></div>'
+            : '<p class="legende">🔒 Pour ajouter ou modifier : un parent se connecte sur son profil (ou ⚙️ Paramètres).</p>');
+  }
+  f.innerHTML = '<div class="fenetre" role="dialog" aria-modal="true" aria-label="Calendrier des anniversaires">' +
+    '<div class="fenetre-tete"><h2>' + titre + '</h2><button class="bouton leger" type="button" data-action="fermerCal">✕ Fermer</button></div>' +
+    '<div class="cal-corps">' + corps + '</div></div>';
+}
+function calOuvrirEdition(id, jour) {
+  var x = id ? ((S.etat.anniversaires || []).filter(function (a) { return a.id === id; })[0]) : null;
+  cal.edit = x ? { id: x.id, nom: x.nom, jour: x.jour, mois: x.mois, annee: x.annee } : { id: '', nom: '', jour: jour || 1, mois: cal.m + 1, annee: 0 };
+  majCal();
+  var champ = document.querySelector('[data-alligne="edit"] [data-champ="nom"]'); if (champ && !x) champ.focus();
+}
+function lireFormCal() {
+  var l = document.querySelector('[data-alligne="edit"]');
   var g = function (c) { return l.querySelector('[data-champ="' + c + '"]').value; };
-  return { id: id === 'nouvelle' ? '' : id, nom: g('nom'), jour: Number(g('jour')), mois: Number(g('mois')), annee: g('annee') };
+  return { id: cal.edit.id, nom: g('nom'), jour: Number(g('jour')), mois: Number(g('mois')), annee: g('annee') };
 }
+document.addEventListener('click', function (ev) { var f = document.getElementById('fenetreCal'); if (f && ev.target === f && cal && !cal.edit) fermerCal(); });
+setInterval(function () { var f = document.getElementById('fenetreCal'); if (f && Date.now() - Number(f.dataset.ouverte) > 300000) fermerCal(); }, 15000);
 function lireRoutine(id) {
   var l = document.querySelector('[data-rligne="' + id + '"]');
   var g = function (c) { return l.querySelector('[data-champ="' + c + '"]'); };
@@ -759,7 +844,7 @@ function entete() {
 }
 
 function vueProfils() {
-  return tableauAccueil() + '<div class="titre-profils"><h2>Qui es-tu ?</h2><button class="bouton leger bouton-recap" data-action="recapPoints">🏆 Points</button></div><div class="profils petits">' +
+  return tableauAccueil() + '<div class="titre-profils"><h2>Qui es-tu ?</h2><span class="actions"><button class="bouton leger bouton-recap" data-action="ouvrirCalendrier">🎂 Anniversaires</button><button class="bouton leger bouton-recap" data-action="recapPoints">🏆 Points</button></span></div><div class="profils petits">' +
     S.etat.membres.map(function (m) {
       return '<button class="profil" data-action="choisirProfil" data-nom="' + esc(m.nom) + '" style="border-color:' + esc(m.couleur) + '">' +
              avatar(m.nom) + esc(m.nom) + (m.aCode ? ' 🔒' : '') + '</button>';
@@ -1206,13 +1291,25 @@ document.addEventListener('click', function (ev) {
     return occupe(b, srv('enregistrerRoutine', S.pin, nr)).then(siOk('Étape ajoutée'));
   }
   if (a === 'supprimerRoutine') { if (confirm('Supprimer cette étape ?')) return occupe(b, srv('supprimerRoutine', S.pin, id)); return; }
-  if (a === 'enregistrerAnniv') return occupe(b, srv('enregistrerAnniversaire', S.pin, lireAnniv(id))).then(siOk('Enregistré'));
-  if (a === 'ajouterAnniv') {
-    var na = lireAnniv('nouvelle');
-    if (!na.nom.trim()) { toast('Donne un prénom'); return; }
-    return occupe(b, srv('enregistrerAnniversaire', S.pin, na)).then(siOk('Anniversaire ajouté 🎂'));
+  if (a === 'ouvrirCalendrier') { ouvrirCal(); return; }
+  if (a === 'fermerCal') { fermerCal(); return; }
+  if (a === 'calMois') { var nm = cal.m + Number(b.dataset.sens); cal.a += nm < 0 ? -1 : nm > 11 ? 1 : 0; cal.m = (nm + 12) % 12; majCal(); return; }
+  if (a === 'calAujourdhui') { var dn = new Date(); cal.a = dn.getFullYear(); cal.m = dn.getMonth(); majCal(); return; }
+  if (a === 'calEdit') { calOuvrirEdition(b.dataset.id, 0); return; }
+  if (a === 'calJour') {
+    var dj = Number(b.dataset.jour), lj = annivsDuMois(cal.a, cal.m).filter(function (x) { return x.jour === dj; });
+    calOuvrirEdition(lj.length ? lj[0].id : '', dj); return;
   }
-  if (a === 'supprimerAnniv') { if (confirm('Supprimer cet anniversaire ?')) return occupe(b, srv('supprimerAnniversaire', S.pin, id)); return; }
+  if (a === 'calAnnuler') { cal.edit = null; majCal(); return; }
+  if (a === 'calEnregistrer') {
+    var fa = lireFormCal();
+    if (!fa.nom.trim()) { toast('Donne un prénom'); return; }
+    return occupe(b, srv('enregistrerAnniversaire', autorite(), fa)).then(function (ok) { if (ok && cal) { cal.m = fa.mois - 1; cal.edit = null; majCal(); toast('Enregistré 🎂'); } });
+  }
+  if (a === 'calSupprimer') {
+    if (!confirm('Supprimer cet anniversaire ?')) return;
+    return occupe(b, srv('supprimerAnniversaire', autorite(), cal.edit.id)).then(function (ok) { if (ok && cal) { cal.edit = null; majCal(); toast('Supprimé'); } });
+  }
   if (a === 'pauseRoutines') { var pz = b.dataset.v === '1'; return occupe(b, srv('pauseRoutines', S.pin, pz)).then(siOk(pz ? 'Routines en pause ⏸' : 'Routines reprises ▶')); }
   if (a === 'enregistrer') return occupe(b, srv('enregistrerTache', S.pin, lireLigne(id))).then(siOk('Enregistré'));
   if (a === 'ajouter') {
@@ -1696,7 +1793,7 @@ function ouvrirVeille() {
   if (veilleOuverte) return;
   veilleOuverte = true;
   var f = document.getElementById('fenetreMeteo'); if (f) f.remove();
-  fermerDetailFille(); fermerRecap();
+  fermerDetailFille(); fermerRecap(); fermerCal();
   var v = document.createElement('div');
   v.className = 'veille'; v.id = 'veille'; v.setAttribute('role', 'button'); v.setAttribute('aria-label', 'Touche l\'écran pour revenir');
   v.innerHTML = '<div class="veille-bloc"></div><div class="veille-aide">Touche l\'écran pour revenir</div>';
