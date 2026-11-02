@@ -218,6 +218,11 @@
   .bloc h3 { margin: 0 0 8px; font-size: .9em; color: var(--doux); text-transform: uppercase; letter-spacing: .08em; }
   .horloge { font-size: 3.4em; font-weight: 700; line-height: 1; letter-spacing: .02em; }
   .horloge-date { color: var(--doux); margin-top: 6px; }
+  /* Anniversaires : à droite de l'heure, sans ajouter de hauteur à la colonne */
+  .cote > .bloc:first-child { position: relative; }
+  .anniv { position: absolute; top: 12px; right: 14px; max-width: 54%; text-align: right; font-weight: 700; font-size: .85em; line-height: 1.3; }
+  [data-alligne] input[data-champ=nom], [data-alligne] .reglages { width: 100%; box-sizing: border-box; }
+  .anniv span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .meteo-maint { display: flex; align-items: center; gap: 12px; }
   .meteo-ico { font-size: 2.6em; line-height: 1; }
   .meteo-temp { font-size: 2.2em; font-weight: 700; line-height: 1; }
@@ -323,6 +328,8 @@
   .veille-bloc { position: absolute; text-align: center; transition: left 2s ease, top 2s ease; transform: translate(-50%, -50%); }
   .veille-heure { font-size: clamp(90px, 17vw, 220px); font-weight: 700; line-height: 1; letter-spacing: .02em; }
   .veille-date { font-size: 1.5em; color: #B9B3A7; margin-top: 10px; }
+  .veille-anniv { font-size: 1.5em; color: #E9E5DC; margin-top: 10px; font-weight: 700; }
+  .veille-anniv span { display: inline-block; margin: 0 8px; }
   .veille-meteo { font-size: 1.7em; margin-top: 18px; display: flex; gap: 14px; justify-content: center; align-items: center; }
   .veille-meteo .ico { font-size: 1.6em; }
   .veille-meteo .txt { font-size: .6em; color: #B9B3A7; }
@@ -620,6 +627,31 @@ function carteAdminRoutines() {
     '<option value="lun-ven"' + (S.etat.soirJours !== 'dim-jeu' ? ' selected' : '') + '>du lundi au vendredi</option>' +
     '<option value="dim-jeu"' + (S.etat.soirJours === 'dim-jeu' ? ' selected' : '') + '>du dimanche au jeudi (veille d\'école)</option></select></div></div>';
 }
+var NOMS_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+function ligneAnniv(x) {
+  var n = function (min, max, sel) { var o = ''; for (var i = min; i <= max; i++) o += '<option value="' + i + '"' + (i === sel ? ' selected' : '') + '>' + i + '</option>'; return o; };
+  var mo = NOMS_MOIS.map(function (nm, i) { return '<option value="' + (i + 1) + '"' + (x && x.mois === i + 1 ? ' selected' : '') + '>' + nm + '</option>'; }).join('');
+  return '<input data-champ="nom" value="' + esc(x ? x.nom : '') + '" placeholder="Ex. : Mamie" aria-label="Prénom">' +
+    '<div class="reglages" style="grid-template-columns:1fr 2fr 1.4fr"><select data-champ="jour" aria-label="Jour">' + n(1, 31, x ? x.jour : 0) + '</select>' +
+    '<select data-champ="mois" aria-label="Mois">' + mo + '</select>' +
+    '<input data-champ="annee" type="number" inputmode="numeric" min="1900" max="2100" placeholder="Année" value="' + (x && x.annee ? x.annee : '') + '" aria-label="Année de naissance (facultatif)"></div>';
+}
+function carteAdminAnniv() {
+  var tous = (S.etat.anniversaires || []).slice().sort(function (a, b) { return a.mois - b.mois || a.jour - b.jour; });
+  return '<div class="carte"><h3>🎂 Les anniversaires</h3><p class="legende" style="margin-top:0">Le jour J, le prénom s\'affiche à côté de la date, avec l\'âge si tu indiques l\'année de naissance (facultatif).</p>' +
+    '<div class="liste-taches">' + (tous.length ? tous.map(function (x) {
+      return '<div class="ligne-admin" data-alligne="' + esc(x.id) + '">' + ligneAnniv(x) +
+        '<div class="actions"><button class="bouton" data-action="enregistrerAnniv" data-id="' + esc(x.id) + '">💾 Enregistrer</button>' +
+        '<button class="bouton danger pousse" data-action="supprimerAnniv" data-id="' + esc(x.id) + '">🗑 Supprimer</button></div></div>';
+    }).join('') : '<div class="legende">Aucun anniversaire enregistré.</div>') + '</div>' +
+    '<div class="ajout-tache"><h3>➕ Ajouter un anniversaire</h3><div class="ligne-admin" data-alligne="nouvelle">' + ligneAnniv(null) +
+    '<div class="actions" style="margin-top:8px"><button class="bouton vert" data-action="ajouterAnniv">+ Ajouter</button></div></div></div></div>';
+}
+function lireAnniv(id) {
+  var l = document.querySelector('[data-alligne="' + id + '"]');
+  var g = function (c) { return l.querySelector('[data-champ="' + c + '"]').value; };
+  return { id: id === 'nouvelle' ? '' : id, nom: g('nom'), jour: Number(g('jour')), mois: Number(g('mois')), annee: g('annee') };
+}
 function lireRoutine(id) {
   var l = document.querySelector('[data-rligne="' + id + '"]');
   var g = function (c) { return l.querySelector('[data-champ="' + c + '"]'); };
@@ -663,6 +695,7 @@ setInterval(verifierExpiration, 5000);
 function appliquer(etat) {
   var premier = !S.etat;
   S.etat = etat;
+  if (window.majHorloge) window.majHorloge();
   if (premier && S.profil && sessionExpiree()) { S.profil = null; ecrireLocal('profil', null); }   // appli rouverte après un long moment
   rendre();
 }
@@ -1029,6 +1062,7 @@ function vueParents() {
     '<select data-champ="assignee" disabled aria-label="Pour qui"><option value="">Pour qui ?</option>' + filles.map(function (f) { return '<option>' + esc(f.nom) + '</option>'; }).join('') + '</select></div>' +
     '<div class="actions" style="margin-top:8px"><button class="bouton vert" data-action="ajouter">+ Ajouter</button></div></div></div></div>';
   html += carteAdminRoutines();
+  html += carteAdminAnniv();
 
   html += '<div class="carte"><h3>Rotation</h3><div class="champ"><label for="freq">Les tâches tournent toutes les…</label>' +
     '<select id="freq">' + [1, 2, 3, 4].map(function (n) { return '<option value="' + n + '"' + (S.etat.frequence === n ? ' selected' : '') + '>' + n + ' semaine' + (n > 1 ? 's' : '') + '</option>'; }).join('') + '</select></div>' +
@@ -1172,6 +1206,13 @@ document.addEventListener('click', function (ev) {
     return occupe(b, srv('enregistrerRoutine', S.pin, nr)).then(siOk('Étape ajoutée'));
   }
   if (a === 'supprimerRoutine') { if (confirm('Supprimer cette étape ?')) return occupe(b, srv('supprimerRoutine', S.pin, id)); return; }
+  if (a === 'enregistrerAnniv') return occupe(b, srv('enregistrerAnniversaire', S.pin, lireAnniv(id))).then(siOk('Enregistré'));
+  if (a === 'ajouterAnniv') {
+    var na = lireAnniv('nouvelle');
+    if (!na.nom.trim()) { toast('Donne un prénom'); return; }
+    return occupe(b, srv('enregistrerAnniversaire', S.pin, na)).then(siOk('Anniversaire ajouté 🎂'));
+  }
+  if (a === 'supprimerAnniv') { if (confirm('Supprimer cet anniversaire ?')) return occupe(b, srv('supprimerAnniversaire', S.pin, id)); return; }
   if (a === 'pauseRoutines') { var pz = b.dataset.v === '1'; return occupe(b, srv('pauseRoutines', S.pin, pz)).then(siOk(pz ? 'Routines en pause ⏸' : 'Routines reprises ▶')); }
   if (a === 'enregistrer') return occupe(b, srv('enregistrerTache', S.pin, lireLigne(id))).then(siOk('Enregistré'));
   if (a === 'ajouter') {
@@ -1267,6 +1308,28 @@ function jourOeufs(d) {
 }
 function oeufHtml(d) {
   return jourOeufs(d) ? ' <span title="Jour des œufs pour nous">🥚</span>' : ' <span class="oeuf-barre" title="Œufs pour les voisins">🥚</span>';
+}
+
+/* ===== Anniversaires des proches : affichés le jour même, à côté de la date ===== */
+function anniversairesDuJour(d) {
+  var liste = (S.etat && S.etat.anniversaires) || [], m = d.getMonth() + 1, j = d.getDate(), a = d.getFullYear();
+  var bissextile = (a % 4 === 0 && a % 100 !== 0) || a % 400 === 0;
+  return liste.filter(function (x) {
+    if (x.mois === m && x.jour === j) return true;
+    return x.mois === 2 && x.jour === 29 && !bissextile && m === 2 && j === 28;   // 29 février : fêté le 28 les années normales
+  });
+}
+function annivHtml(d, classe) {
+  var l = anniversairesDuJour(d);
+  if (!l.length) return '';
+  var texte = function (x) {
+    var age = x.annee ? d.getFullYear() - x.annee : 0;
+    return '🎂 ' + x.nom + (age > 0 ? ' · ' + age + (age > 1 ? ' ans' : ' an') : '');
+  };
+  var montres = classe === 'anniv' && l.length > 2 ? l.slice(0, 1) : l;   // colonne de droite : place pour 2 lignes
+  var html = montres.map(function (x) { return '<span title="' + esc(texte(x)) + '">' + esc(texte(x)) + '</span>'; }).join('');
+  if (montres.length < l.length) html += '<span>+ ' + (l.length - montres.length) + ' autres</span>';
+  return '<div class="' + classe + '">' + html + '</div>';
 }
 
 /* ===== Phrase du jour : dicton 📜, encouragement 💪 ou défi 🎯, en alternance (la même sur toutes les tablettes) ===== */
@@ -1387,8 +1450,9 @@ function phaseLune(date) {
   function horloge() {
     var d = new Date();
     document.getElementById('horloge').textContent = pad(d.getHours()) + ':' + pad(d.getMinutes());
-    document.getElementById('horlogeDate').innerHTML = esc(d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })) + oeufHtml(d);
+    document.getElementById('horlogeDate').innerHTML = esc(d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })) + oeufHtml(d) + annivHtml(d, 'anniv');
   }
+  window.majHorloge = horloge;
   horloge(); setInterval(horloge, 15000);
 
   // Codes météo WMO -> icône et mot
@@ -1610,7 +1674,7 @@ var dernierToucher = Date.now(), veilleOuverte = false, veillePos = 0;
 function contenuVeille() {
   var d = new Date(), pad2 = function (n) { return (n < 10 ? '0' : '') + n; };
   var m = window.meteoVeille, html = '<div class="veille-heure">' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + '</div>' +
-    '<div class="veille-date">' + esc(d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })) + oeufHtml(d) + '</div>' +
+    '<div class="veille-date">' + esc(d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })) + oeufHtml(d) + '</div>' + annivHtml(d, 'veille-anniv') +
     '<div class="veille-phrase">' + esc(phraseDuJour(d)) + '</div>';
   if (m) html += '<div class="veille-meteo"><span class="ico">' + m.ico + '</span><b>' + m.temp + '°</b><span class="txt">' + esc(m.txt) + '<br>' + m.max + '° / ' + m.min + '° · pluie ' + m.pluie + ' %</span></div>';
   var pc = S.etat && typeof periodeEnCours === 'function' ? periodeEnCours() : null;
