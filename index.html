@@ -651,7 +651,7 @@ var NOMS_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet
 function ligneAnniv(x) {
   var n = function (min, max, sel) { var o = ''; for (var i = min; i <= max; i++) o += '<option value="' + i + '"' + (i === sel ? ' selected' : '') + '>' + i + '</option>'; return o; };
   var mo = NOMS_MOIS.map(function (nm, i) { return '<option value="' + (i + 1) + '"' + (x && x.mois === i + 1 ? ' selected' : '') + '>' + nm + '</option>'; }).join('');
-  return '<input data-champ="nom" value="' + esc(x ? x.nom : '') + '" placeholder="Ex. : Mamie" aria-label="Prénom">' +
+  return '<input data-champ="nom" value="' + esc(x ? x.nom : '') + '" placeholder="Ex. : Papa" aria-label="Prénom">' +
     '<div class="reglages" style="grid-template-columns:1fr 2fr 1.4fr"><select data-champ="jour" aria-label="Jour">' + n(1, 31, x ? x.jour : 0) + '</select>' +
     '<select data-champ="mois" aria-label="Mois">' + mo + '</select>' +
     '<input data-champ="annee" type="number" inputmode="numeric" min="1900" max="2100" placeholder="Année" value="' + (x && x.annee ? x.annee : '') + '" aria-label="Année de naissance (facultatif)"></div>';
