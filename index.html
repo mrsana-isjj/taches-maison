@@ -270,6 +270,18 @@
   .radio-pied { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .radio-pied .bouton { min-height: 48px; padding: 6px 14px; }
   .radio-ajout { margin-top: 14px; }
+  .res-ligne { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .res-nom { flex: 1; min-width: 0; }
+  .res-nom b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .res-nom span { font-size: .8em; color: var(--doux); }
+  .res-ligne .bouton { min-height: 44px; padding: 4px 14px; }
+  .radio-ajout { border-top: 2px solid var(--bord); padding-top: 10px; }
+  .radio-ajout .legende { font-size: .85em; }
+  .radio-cherche { display: flex; gap: 6px; margin-bottom: 8px; }
+  .radio-cherche input { flex: 1; margin-bottom: 0; min-width: 0; }
+  .radio-cherche select { min-height: 48px; border-radius: 12px; border: 2px solid var(--bord); background: var(--carte); padding: 0 8px; }
+  .radio-cherche .bouton { min-height: 48px; padding: 4px 14px; }
+  .radio-ajout summary { cursor: pointer; padding: 8px 0; font-size: .9em; color: var(--doux); }
   .radio-ajout h4 { margin: 0 0 6px; font-size: .95em; }
   .radio-ajout input { width: 100%; min-height: 48px; border-radius: 12px; border: 2px solid var(--bord); padding: 0 12px; background: var(--carte); margin-bottom: 8px; }
   .mn-temps { font-size: 4.2em; font-weight: 700; text-align: center; line-height: 1.1; margin: 4px 0 12px; letter-spacing: .03em; }
@@ -1690,7 +1702,7 @@ function phaseLune(date) {
     var m = document.getElementById('radMsg');
     if (m) { m.className = 'radio-msg' + (erreurRadio ? ' err' : ''); m.textContent = messageRadio || (courant ? '🔊 ' + courant.nom + ' en cours' : 'Touche une radio pour l\'écouter'); }
   }
-  function dire(t, err) { messageRadio = t; erreurRadio = !!err; afficherRadios(); }
+  function dire(t, err) { messageRadio = t; erreurRadio = !!err; afficherRadios(); if (typeof afficherResultats === 'function') afficherResultats(); }
   function arreter(garderMessage) {
     lecteur.pause(); lecteur.removeAttribute('src'); lecteur.load();
     courant = null; titre('Radio'); if (!garderMessage) { messageRadio = ''; erreurRadio = false; } afficherRadios();
@@ -1724,16 +1736,55 @@ function phaseLune(date) {
       '<div class="radio-pied"><button class="bouton danger" type="button" data-rarret="1">⏹ Arrêter</button>' +
       '<button class="bouton leger" type="button" data-rappli="radio" aria-label="Autres radios (appli radio.fr)">📱 Autres radios</button>' +
       '<button class="bouton leger" type="button" data-rappli="ytmusic" aria-label="Ouvrir YouTube Music">🎵 YouTube Music</button></div>' +
-      (peut ? '<div class="radio-ajout ligne-admin"><h4>Ajouter une radio (parents)</h4>' +
+      (peut ? '<div class="radio-ajout"><h4>Ajouter une radio (parents)</h4>' +
+        '<div class="radio-cherche"><input id="radQ" type="search" maxlength="40" placeholder="Chercher une radio : jazz, Nostalgie…" aria-label="Chercher une radio">' +
+        '<select id="radPays" aria-label="Pays"><option value="">Tous pays</option><option value="BE">Belgique</option><option value="FR">France</option></select>' +
+        '<button class="bouton" type="button" data-rcherche="1">🔍</button></div>' +
+        '<div id="radRes"></div>' +
+        '<details><summary>Saisir une adresse à la main</summary>' +
         '<input id="radNom" maxlength="40" placeholder="Nom de la radio" aria-label="Nom de la radio">' +
         '<input id="radUrl" type="url" inputmode="url" placeholder="Adresse directe du flux : https://…" aria-label="Adresse du flux audio">' +
         '<div class="legende" style="margin:0 0 8px">Il faut le lien direct du flux audio (souvent en .mp3 ou .aac), pas la page du site de la radio.</div>' +
-        '<button class="bouton vert" type="button" data-rajout="1">➕ Ajouter</button></div>'
+        '<button class="bouton vert" type="button" data-rajout="1">➕ Ajouter</button></details></div>'
        : '<div class="legende" style="margin-top:14px">Seuls les parents peuvent ajouter ou retirer des radios (connecte-toi avec ton code parents).</div>') +
       '</div></div>';
     document.body.appendChild(v);
     afficherRadios();
   }
+  // Recherche de radios dans l'annuaire libre radio-browser.info (seuls les flux https peuvent être lus dans la page)
+  var resultats = [], ignores = 0;
+  function afficherResultats() {
+    var z = document.getElementById('radRes'); if (!z) return;
+    var deja = listeRadios().map(function (r) { return r.url; });
+    z.innerHTML = resultats.map(function (r, i) {
+      var ajoutee = deja.indexOf(r.url) >= 0, ecoute = memeRadio(courant, r);
+      return '<div class="res-ligne"><div class="res-nom"><b>' + esc(r.nom) + '</b><span>' + esc(r.meta) + '</span></div>' +
+        '<button class="bouton leger" type="button" data-rprev="' + i + '" aria-label="Écouter ' + esc(r.nom) + '">' + (ecoute ? '⏹' : '▶') + '</button>' +
+        (ajoutee ? '<span class="legende">✓ ajoutée</span>' : '<button class="bouton vert" type="button" data-radd="' + i + '" aria-label="Ajouter ' + esc(r.nom) + '">➕</button>') + '</div>';
+    }).join('') + (resultats.length && ignores ? '<div class="legende">' + ignores + ' résultat(s) non affiché(s) : flux non sécurisé (http), illisible dans l\'appli.</div>' : '') +
+      (!resultats.length ? '<div class="legende">Aucune radio lisible trouvée. Essaie un autre nom, ou « Tous pays ».</div>' : '');
+  }
+  function chercherRadios() {
+    var q = document.getElementById('radQ').value.trim(), pays = document.getElementById('radPays').value, z = document.getElementById('radRes');
+    if (q.length < 2) { toast('Tape au moins 2 lettres'); return; }
+    z.innerHTML = '<div class="legende">Recherche…</div>';
+    fetch('https://all.api.radio-browser.info/json/stations/search?name=' + encodeURIComponent(q) + '&hidebroken=true&limit=60&order=clickcount&reverse=true' + (pays ? '&countrycode=' + pays : ''))
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (l) {
+        var vus = {}; ignores = 0;
+        resultats = l.filter(function (x) {
+          var u = x.url_resolved || '', n = String(x.name || '').trim();
+          if (!n) return false;
+          if (!/^https:\/\/\S+$/i.test(u) || u.length > 500) { ignores++; return false; }
+          if (vus[u]) return false; vus[u] = 1; return true;
+        }).slice(0, 15).map(function (x) {
+          return { nom: String(x.name).trim().slice(0, 40), url: x.url_resolved, meta: [x.countrycode, x.codec, x.bitrate ? x.bitrate + ' kb/s' : ''].filter(Boolean).join(' · ') };
+        });
+        afficherResultats();
+      })
+      .catch(function () { z.innerHTML = '<div class="radio-msg err">Recherche impossible pour le moment (connexion ?)</div>'; });
+  }
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' && ev.target.id === 'radQ') { ev.preventDefault(); chercherRadios(); } });
   // Applis de musique : même forme de lien que celle qui ouvre bien radio.fr sur la tablette
   var APPLIS = { radio: { site: 'www.radio.fr', paquet: APPLI_RADIO }, ytmusic: { site: 'music.youtube.com', paquet: 'com.google.android.apps.youtube.music' } };
   function ouvrirAppli(cle) {
@@ -1764,6 +1815,15 @@ function phaseLune(date) {
     if (ev.target.closest('[data-rarret]')) { arreter(); return; }
     b = ev.target.closest('[data-rappli]');
     if (b) { if (courant) arreter(); ouvrirAppli(b.dataset.rappli); return; }
+    if (ev.target.closest('[data-rcherche]')) { chercherRadios(); return; }
+    b = ev.target.closest('[data-rprev]');
+    if (b) { var pr = resultats[Number(b.dataset.rprev)]; if (!pr) return; if (memeRadio(courant, pr)) arreter(); else { essais = 0; if (courant) arreter(); jouer(pr); } afficherResultats(); return; }
+    b = ev.target.closest('[data-radd]');
+    if (b) {
+      var ra = resultats[Number(b.dataset.radd)]; if (!ra || !autorite()) return;
+      occupe(b, srv('enregistrerRadio', autorite(), { nom: ra.nom, url: ra.url })).then(function (ok) { if (ok) { toast('« ' + ra.nom + ' » ajoutée'); afficherRadios(); afficherResultats(); } });
+      return;
+    }
     b = ev.target.closest('[data-rajout]');
     if (b) {
       var nom = document.getElementById('radNom').value.trim(), url = document.getElementById('radUrl').value.trim();
