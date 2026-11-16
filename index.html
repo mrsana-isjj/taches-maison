@@ -258,6 +258,34 @@
   .radios { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .radios button { min-height: 56px; border-radius: 14px; border: 2px solid var(--bord); background: var(--carte); font-weight: 600; font-size: .85em; padding: 6px; }
   .radios button.joue { background: var(--accent); color: #fff; border-color: var(--accent); }
+  /* Fenêtres Radios et Minuteur */
+  #fenetreRadios .fenetre, #fenetreMinuteur .fenetre { width: min(600px, 100%); }
+  #fenetreRadios .radios { grid-template-columns: 1fr 1fr; gap: 8px; }
+  #fenetreRadios .radios button { min-height: 52px; font-size: .9em; padding: 6px 8px; }
+  .radio-ligne { display: flex; gap: 6px; }
+  .radio-ligne .radio-play { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #fenetreRadios .radios .radio-sup { flex: 0 0 44px; min-height: 52px; padding: 0; color: var(--rouge); border-color: var(--rouge); }
+  .radio-msg { min-height: 1.4em; margin: 0 0 10px; font-size: .95em; color: var(--doux); }
+  .radio-msg.err { color: var(--rouge); font-weight: 600; }
+  .radio-pied { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .radio-pied .bouton { min-height: 48px; padding: 6px 14px; }
+  .radio-ajout { margin-top: 14px; }
+  .radio-ajout h4 { margin: 0 0 6px; font-size: .95em; }
+  .radio-ajout input { width: 100%; min-height: 48px; border-radius: 12px; border: 2px solid var(--bord); padding: 0 12px; background: var(--carte); margin-bottom: 8px; }
+  .mn-temps { font-size: 4.2em; font-weight: 700; text-align: center; line-height: 1.1; margin: 4px 0 12px; letter-spacing: .03em; }
+  .mn-rapide { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 10px; }
+  .mn-rapide button { min-height: 52px; border-radius: 14px; border: 2px solid var(--bord); background: var(--carte); font-weight: 600; }
+  .mn-rapide button.joue { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .mn-libre { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .mn-libre input { width: 110px; min-height: 48px; border-radius: 12px; border: 2px solid var(--bord); padding: 0 12px; background: var(--carte); }
+  .mn-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .mn-actions .bouton { flex: 1; min-height: 56px; }
+  #alarmeMinuteur { z-index: 60; background: rgba(20, 18, 12, .88); }
+  #alarmeMinuteur .fenetre { text-align: center; padding: 28px 24px; align-items: center; gap: 16px; }
+  #alarmeMinuteur .mn-gros { font-size: 2.2em; font-weight: 700; }
+  #alarmeMinuteur .bouton { font-size: 1.6em; min-height: 90px; width: 100%; }
+  .applis button.sonne { background: var(--rouge); color: #fff; border-color: var(--rouge); }
+  .applis button.tourne { border-color: var(--accent); color: var(--accent); }
   .radio-etat { margin-top: 8px; font-size: .85em; color: var(--doux); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   /* Paramètres : liste des tâches, une carte par tâche */
   .liste-taches { display: grid; gap: 12px; }
@@ -375,10 +403,10 @@
 <aside class="cote" id="cote" aria-label="Heure, météo et radio">
   <div class="bloc"><div class="horloge" id="horloge">--:--</div><div class="horloge-date" id="horlogeDate"></div></div>
   <div class="bloc"><h3>Météo · Rivière</h3><div id="meteo" class="legende">Chargement…</div></div>
-  <div class="bloc"><h3 id="radioTitre">Radio</h3><div class="radios" id="radios"></div><audio id="lecteur" preload="none"></audio>
+  <div class="bloc"><h3 id="radioTitre">Radio</h3><audio id="lecteur" preload="none"></audio>
     <div class="applis">
-      <button id="relancerSon" aria-label="Relancer le son (après reconnexion de la barre de son)">🔄 Relancer le son</button>
-      <button data-appli="radio" aria-label="Autres radios (appli radio.fr)">📱 Autres radios</button>
+      <button id="ouvrirRadios" aria-label="Ouvrir les radios">📻 Radios</button>
+      <button id="ouvrirMinuteur" aria-label="Ouvrir le minuteur">⏲️ Minuteur</button>
     </div></div>
 </aside>
 <div class="saisie cache" id="saisie">
@@ -1540,15 +1568,16 @@ function phaseLune(date) {
 /* ===== Colonne de droite : heure, météo (Open-Meteo, sans compte), radio RTBF ===== */
 (function () {
   var COORD = { lat: 50.357, lon: 4.874 };   // Rivière (Profondeville)
-  // Présélections : lues directement dans la page (Fully Kiosk reste au premier plan)
-  var RADIOS = [
-    ['La Première', 'https://radios.rtbf.be/laprem1ere-128.mp3'],
-    ['Radio Nova', 'https://novazz.ice.infomaniak.ch/novazz-128.mp3'],
-    ['FIP', 'https://icecast.radiofrance.fr/fip-midfi.mp3?id=radiofrance'],
-    ['FIP Rock', 'https://icecast.radiofrance.fr/fiprock-midfi.mp3?id=radiofrance'],
-    ['France Culture', 'https://icecast.radiofrance.fr/franceculture-midfi.mp3?id=radiofrance'],
-    ['France Musique', 'https://icecast.radiofrance.fr/francemusique-midfi.mp3?id=radiofrance']
+  // Radios : liste partagée (onglet « Radios » du Google Sheet), lues directement dans la page (Fully Kiosk reste au premier plan)
+  var RADIOS_DEFAUT = [
+    { id: 'r1', nom: 'La Première', url: 'https://radios.rtbf.be/laprem1ere-128.mp3' },
+    { id: 'r2', nom: 'Radio Nova', url: 'https://novazz.ice.infomaniak.ch/novazz-128.mp3' },
+    { id: 'r3', nom: 'FIP', url: 'https://icecast.radiofrance.fr/fip-midfi.mp3?id=radiofrance' },
+    { id: 'r4', nom: 'FIP Rock', url: 'https://icecast.radiofrance.fr/fiprock-midfi.mp3?id=radiofrance' },
+    { id: 'r5', nom: 'France Culture', url: 'https://icecast.radiofrance.fr/franceculture-midfi.mp3?id=radiofrance' },
+    { id: 'r6', nom: 'France Musique', url: 'https://icecast.radiofrance.fr/francemusique-midfi.mp3?id=radiofrance' }
   ];
+  function listeRadios() { var e = S && S.etat; return e && e.radios ? e.radios : RADIOS_DEFAUT; }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function horloge() {
     var d = new Date();
@@ -1571,14 +1600,15 @@ function phaseLune(date) {
     if (c <= 86) return ['🌨️', 'Averses de neige'];
     return ['⛈️', 'Orage'];
   }
-  var donneesMeteo = null;
+  var donneesMeteo = null, essaisMeteo = 0, minuteurMeteo = null, derniereMeteo = 0;
   function meteo() {
+    clearTimeout(minuteurMeteo);
     fetch('https://api.open-meteo.com/v1/forecast?latitude=' + COORD.lat + '&longitude=' + COORD.lon +
       '&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max' +
       '&hourly=temperature_2m,weather_code,precipitation_probability,precipitation,is_day&timezone=Europe%2FBrussels&forecast_days=3')
-      .then(function (r) { return r.json(); })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (m) {
-        donneesMeteo = m;
+        donneesMeteo = m; essaisMeteo = 0; derniereMeteo = Date.now();
         var t = temps(m.current.weather_code), j = m.daily;
         window.meteoVeille = { ico: t[0], temp: Math.round(m.current.temperature_2m), txt: t[1], max: Math.round(j.temperature_2m_max[0]), min: Math.round(j.temperature_2m_min[0]), pluie: j.precipitation_probability_max[0] };
         var noms = ['Auj.', 'Demain', new Date(j.time[2] + 'T12:00').toLocaleDateString('fr-BE', { weekday: 'short' })];
@@ -1593,9 +1623,15 @@ function phaseLune(date) {
           }).join('') + '</div>';
         if (document.getElementById('fenetreMeteo')) ouvrirHeures(Number(document.getElementById('fenetreMeteo').dataset.jour));   // mise à jour si ouverte
       })
-      .catch(function () { document.getElementById('meteo').textContent = 'Météo indisponible pour le moment'; });
+      .catch(function () {
+        // Réseau pas encore revenu (réveil de la tablette, Wi-Fi…) : on réessaie vite, puis de moins en moins souvent
+        if (!donneesMeteo) { document.getElementById('meteo').className = 'legende'; document.getElementById('meteo').textContent = 'Météo indisponible pour le moment · nouvel essai automatique'; }
+        essaisMeteo++; minuteurMeteo = setTimeout(meteo, Math.min(20000 * essaisMeteo, 300000));
+      });
   }
   meteo(); setInterval(meteo, 30 * 60 * 1000);
+  window.addEventListener('online', meteo);   // la connexion revient : on recharge tout de suite
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && (!donneesMeteo || Date.now() - derniereMeteo > 10 * 60 * 1000)) meteo(); });
 
   // Fenêtre : détail heure par heure d'un jour (0 = aujourd'hui)
   function fermerHeures() { var f = document.getElementById('fenetreMeteo'); if (f) f.remove(); }
@@ -1640,60 +1676,216 @@ function phaseLune(date) {
   setInterval(function () { var f = document.getElementById('fenetreMeteo'); if (f && Date.now() - Number(f.dataset.ouverte) > 120000) fermerHeures(); }, 15000);
 
   var APPLI_RADIO = 'de.radio.android';
-  var lecteur = document.getElementById('lecteur'), enCours = null, essais = 0, derniere = null;
+  var lecteur = document.getElementById('lecteur'), courant = null, essais = 0, derniere = null, messageRadio = '', erreurRadio = false;
   function titre(t) { document.getElementById('radioTitre').textContent = t; }
+  function memeRadio(a, b) { return !!a && !!b && a.url === b.url; }
   function afficherRadios() {
-    document.getElementById('radios').innerHTML = RADIOS.map(function (r, i) {
-      return '<button data-radio="' + i + '" class="' + (enCours === i ? 'joue' : '') + '">' + (enCours === i ? '⏹ ' : '📻 ') + r[0] + '</button>';
-    }).join('');
+    var l = document.getElementById('radListe'); if (!l) return;
+    var peut = !!autorite();
+    l.innerHTML = listeRadios().map(function (r, i) {
+      var joue = memeRadio(courant, r);
+      return '<div class="radio-ligne"><button class="radio-play ' + (joue ? 'joue' : '') + '" data-radio="' + i + '">' + (joue ? '⏹ ' : '📻 ') + esc(r.nom) + '</button>' +
+        (peut ? '<button class="radio-sup" data-radio-sup="' + i + '" aria-label="Retirer ' + esc(r.nom) + '">🗑</button>' : '') + '</div>';
+    }).join('') || '<div class="vide">Aucune radio</div>';
+    var m = document.getElementById('radMsg');
+    if (m) { m.className = 'radio-msg' + (erreurRadio ? ' err' : ''); m.textContent = messageRadio || (courant ? '🔊 ' + courant.nom + ' en cours' : 'Touche une radio pour l\'écouter'); }
   }
-  function arreter() {
+  function dire(t, err) { messageRadio = t; erreurRadio = !!err; afficherRadios(); }
+  function arreter(garderMessage) {
     lecteur.pause(); lecteur.removeAttribute('src'); lecteur.load();
-    enCours = null; titre('Radio'); afficherRadios();
+    courant = null; titre('Radio'); if (!garderMessage) { messageRadio = ''; erreurRadio = false; } afficherRadios();
   }
-  function jouer(i, auto) {
-    enCours = i; derniere = i; afficherRadios(); titre('Connexion à ' + RADIOS[i][0] + '…');
-    lecteur.src = RADIOS[i][1] + (RADIOS[i][1].indexOf('?') < 0 ? '?' : '&') + 't=' + Date.now();   // toujours le direct
-    lecteur.play().then(function () { essais = 0; noterSon(); titre('🔊 ' + RADIOS[i][0] + ' · touche pour arrêter'); })
-      .catch(function () { if (enCours === i) { enCours = null; afficherRadios(); titre(auto ? '▶ Touche ' + RADIOS[i][0] + ' pour lancer' : 'Impossible de lancer ' + RADIOS[i][0]); } });
+  function jouer(r, auto) {
+    courant = r; derniere = r; dire('Connexion à ' + r.nom + '…'); titre('Connexion à ' + r.nom + '…');
+    lecteur.src = r.url + (r.url.indexOf('?') < 0 ? '?' : '&') + 't=' + Date.now();   // toujours le direct
+    lecteur.play().then(function () { essais = 0; noterSon(); titre('🔊 ' + r.nom); dire(''); })
+      .catch(function () { if (memeRadio(courant, r)) { courant = null; titre(auto ? '▶ Touche ' + r.nom + ' pour lancer' : 'Radio'); dire(auto ? 'Touche ' + r.nom + ' pour lancer' : '⚠️ Impossible de lire « ' + r.nom + ' » : flux injoignable ou non pris en charge', !auto); } });
   }
-
   function noterSon() { ecrireLocal('radioDernierSon', String(Date.now())); }
-  setInterval(function () { if (enCours !== null && !lecteur.paused) noterSon(); }, 60000);
-  document.getElementById('radios').addEventListener('click', function (ev) {
-    var b = ev.target.closest('[data-radio]'); if (!b) return;
-    var i = Number(b.dataset.radio);
-    if (enCours === i) arreter(); else { essais = 0; if (enCours !== null) arreter(); jouer(i); }
-  });
-  // Coupure réseau : on relance la même station (3 essais)
+  setInterval(function () { if (courant && !lecteur.paused) noterSon(); }, 60000);
+  // Coupure réseau : on relance la même station (3 essais), puis on signale clairement l'échec
   lecteur.addEventListener('error', function () {
-    if (enCours === null || !lecteur.getAttribute('src')) return;
-    if (essais < 3) { essais++; var i = enCours; setTimeout(function () { if (enCours === i) jouer(i); }, 3000); }
-    else { enCours = null; afficherRadios(); titre('Radio coupée (connexion ?)'); }
+    if (!courant || !lecteur.getAttribute('src')) return;
+    if (essais < 3) { essais++; var r = courant; setTimeout(function () { if (memeRadio(courant, r)) jouer(r); }, 3000); }
+    else { var n = courant.nom; courant = null; titre('Radio'); dire('⚠️ « ' + n + ' » ne répond pas : coupure de connexion, ou adresse du flux incorrecte', true); }
   });
-  lecteur.addEventListener('ended', function () { if (enCours !== null) jouer(enCours); });
-  // Relancer le son : après avoir reconnecté la barre de son (panneau rapide Android), on redémarre la station
-  // pour que le son reparte sur la sortie active. Le bouton ne reconnecte pas le Bluetooth lui-même.
-  document.getElementById('relancerSon').addEventListener('click', function () {
-    var i = enCours !== null ? enCours : derniere;
-    if (i === null) { toast('Choisis d\'abord une station'); return; }
-    if (enCours !== null) arreter();
-    titre('Relance de ' + RADIOS[i][0] + '…');
-    setTimeout(function () { if (enCours === null) { essais = 0; jouer(i); } }, 700);
-  });
-  // Applis de musique : même forme de lien que celle qui ouvre bien radio.fr sur la tablette
-  var APPLIS = {
-    radio:   { site: 'www.radio.fr',      paquet: APPLI_RADIO }
-  };
-  document.querySelector('.applis').addEventListener('click', function (ev) {
-    var b = ev.target.closest('[data-appli]'); if (!b) return;
-    if (enCours !== null) arreter();   // évite deux musiques en même temps
-    var a = APPLIS[b.dataset.appli];
-    var intent = 'intent://' + a.site + '/#Intent;scheme=https;package=' + a.paquet + ';end';
+  lecteur.addEventListener('ended', function () { if (courant) jouer(courant); });
+
+  /* Fenêtre « Radios » */
+  function fermerRadios() { var f = document.getElementById('fenetreRadios'); if (f) f.remove(); }
+  function ouvrirRadios() {
+    fermerRadios();
+    var peut = !!autorite();
+    var v = document.createElement('div');
+    v.className = 'voile'; v.id = 'fenetreRadios'; v.dataset.ouverte = String(Date.now());
+    v.innerHTML = '<div class="fenetre" role="dialog" aria-modal="true" aria-label="Radios">' +
+      '<div class="fenetre-tete"><h2>📻 Radios</h2><button class="bouton leger" type="button" data-rfermer="1">✕ Fermer</button></div>' +
+      '<div class="cal-corps"><div id="radMsg" class="radio-msg"></div><div class="radios" id="radListe"></div>' +
+      '<div class="radio-pied"><button class="bouton danger" type="button" data-rarret="1">⏹ Arrêter</button>' +
+      '<button class="bouton leger" type="button" data-rrelance="1" aria-label="Relancer le son (après reconnexion de la barre de son)">🔄 Relancer le son</button>' +
+      '<button class="bouton leger" type="button" data-rappli="radio" aria-label="Autres radios (appli radio.fr)">📱 Autres radios</button></div>' +
+      (peut ? '<div class="radio-ajout ligne-admin"><h4>Ajouter une radio (parents)</h4>' +
+        '<input id="radNom" maxlength="40" placeholder="Nom de la radio" aria-label="Nom de la radio">' +
+        '<input id="radUrl" type="url" inputmode="url" placeholder="Adresse directe du flux : https://…" aria-label="Adresse du flux audio">' +
+        '<div class="legende" style="margin:0 0 8px">Il faut le lien direct du flux audio (souvent en .mp3 ou .aac), pas la page du site de la radio.</div>' +
+        '<button class="bouton vert" type="button" data-rajout="1">➕ Ajouter</button></div>'
+       : '<div class="legende" style="margin-top:14px">Seuls les parents peuvent ajouter ou retirer des radios (connecte-toi avec ton code parents).</div>') +
+      '</div></div>';
+    document.body.appendChild(v);
+    afficherRadios();
+  }
+  var APPLI_RADIO_LIEN = function () {
+    var intent = 'intent://www.radio.fr/#Intent;scheme=https;package=' + APPLI_RADIO + ';end';
     if (window.fully && typeof fully.startIntent === 'function') { fully.startIntent(intent); return; }
     location.href = intent;
+  };
+  document.getElementById('ouvrirRadios').addEventListener('click', ouvrirRadios);
+  document.addEventListener('click', function (ev) {
+    var f = document.getElementById('fenetreRadios'); if (!f) return;
+    f.dataset.ouverte = String(Date.now());
+    if (ev.target === f || ev.target.closest('[data-rfermer]')) { fermerRadios(); return; }
+    var b = ev.target.closest('[data-radio]');
+    if (b) {
+      var r = listeRadios()[Number(b.dataset.radio)]; if (!r) return;
+      if (memeRadio(courant, r)) arreter(); else { essais = 0; if (courant) arreter(); jouer(r); }
+      return;
+    }
+    b = ev.target.closest('[data-radio-sup]');
+    if (b) {
+      var s = listeRadios()[Number(b.dataset.radioSup)]; if (!s || !autorite()) return;
+      if (!confirm('Retirer la radio « ' + s.nom + ' » ?')) return;
+      if (memeRadio(courant, s)) arreter();
+      occupe(b, srv('supprimerRadio', autorite(), s.id)).then(function (ok) { if (ok) { toast('Radio retirée'); afficherRadios(); } });
+      return;
+    }
+    if (ev.target.closest('[data-rarret]')) { arreter(); return; }
+    if (ev.target.closest('[data-rrelance]')) {
+      var d = courant || derniere;
+      if (!d) { toast('Choisis d\'abord une station'); return; }
+      if (courant) arreter();
+      dire('Relance de ' + d.nom + '…');
+      setTimeout(function () { if (!courant) { essais = 0; jouer(d); } }, 700);
+      return;
+    }
+    if (ev.target.closest('[data-rappli]')) { if (courant) arreter(); APPLI_RADIO_LIEN(); return; }
+    b = ev.target.closest('[data-rajout]');
+    if (b) {
+      var nom = document.getElementById('radNom').value.trim(), url = document.getElementById('radUrl').value.trim();
+      if (!nom) { toast('Donne un nom à la radio'); return; }
+      if (!/^https:\/\/\S+$/i.test(url)) { toast('L\'adresse doit commencer par https://'); return; }
+      occupe(b, srv('enregistrerRadio', autorite(), { nom: nom, url: url })).then(function (ok) {
+        if (ok) { document.getElementById('radNom').value = ''; document.getElementById('radUrl').value = ''; toast('Radio ajoutée : touche-la pour vérifier qu\'elle joue'); afficherRadios(); }
+      });
+    }
   });
-  afficherRadios();
+  setInterval(function () { var f = document.getElementById('fenetreRadios'); if (f && Date.now() - Number(f.dataset.ouverte) > 300000) fermerRadios(); }, 15000);
+
+  /* Minuteur : compte à rebours qui continue fenêtre fermée ; sonnerie répétée jusqu'à « Stop » */
+  var mn = { etat: 'repos', duree: 5 * 60000, fin: 0, reste: 0 };   // repos | marche | pause | sonne
+  var audioCtx = null, sonnerie = null, finSonnerie = 0;
+  function sauverMn() { ecrireLocal('minuteurEtat', mn.etat === 'repos' || mn.etat === 'sonne' ? null : JSON.stringify(mn)); }
+  try { var sv = JSON.parse(lireLocal('minuteurEtat') || 'null'); if (sv && (sv.etat === 'marche' || sv.etat === 'pause')) mn = sv; } catch (e) {}
+  function resteMn() { return mn.etat === 'marche' ? Math.max(0, mn.fin - Date.now()) : (mn.etat === 'pause' ? mn.reste : mn.duree); }
+  function formatMn(ms) { var s = Math.ceil(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); s = s % 60; return (h ? h + ':' + pad(m) : pad(m)) + ':' + pad(s); }
+  function debloquerSon() {   // à appeler lors d'un toucher : le navigateur n'autorise le son qu'après une action de l'utilisateur
+    try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) {}
+  }
+  function bip(freq, t0, d) {
+    var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'square'; o.frequency.value = freq; o.connect(g); g.connect(audioCtx.destination);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.35, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+    o.start(t0); o.stop(t0 + d + 0.02);
+  }
+  function motifSonnerie() {
+    try {
+      debloquerSon(); var t = audioCtx.currentTime + 0.05;
+      for (var k = 0; k < 3; k++) { bip(1320, t + k * 0.28, 0.18); }
+      bip(1760, t + 0.95, 0.35);
+    } catch (e) {}
+    try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch (e2) {}
+  }
+  function fermerAlarme() { var a = document.getElementById('alarmeMinuteur'); if (a) a.remove(); }
+  function stopSonnerie() {
+    clearInterval(sonnerie); sonnerie = null; fermerAlarme();
+    if (mn.etat === 'sonne') { mn.etat = 'repos'; sauverMn(); }
+    majMn();
+  }
+  function declencher() {
+    mn.etat = 'sonne'; sauverMn(); finSonnerie = Date.now() + 10 * 60000;   // sécurité : s'arrête seule après 10 min
+    if (typeof veilleOuverte !== 'undefined' && veilleOuverte) fermerVeille();   // passe au premier plan, devant l'écran de veille
+    fermerMinuteur();
+    fermerAlarme();
+    var a = document.createElement('div'); a.className = 'voile'; a.id = 'alarmeMinuteur';
+    a.innerHTML = '<div class="fenetre" role="alertdialog" aria-modal="true" aria-label="Minuteur terminé"><div class="mn-gros">⏲️ Temps écoulé !</div>' +
+      '<button class="bouton danger" type="button" data-mstop="1">⏹ Stop</button></div>';
+    document.body.appendChild(a);
+    motifSonnerie();
+    sonnerie = setInterval(function () { if (Date.now() > finSonnerie) { stopSonnerie(); return; } motifSonnerie(); }, 1800);
+    majMn();
+  }
+  function majMn() {
+    var b = document.getElementById('ouvrirMinuteur');
+    if (b) {
+      b.className = mn.etat === 'sonne' ? 'sonne' : (mn.etat === 'marche' || mn.etat === 'pause' ? 'tourne' : '');
+      b.textContent = mn.etat === 'sonne' ? '⏲️ Stop !' : (mn.etat === 'marche' ? '⏲️ ' + formatMn(resteMn()) : (mn.etat === 'pause' ? '⏸ ' + formatMn(resteMn()) : '⏲️ Minuteur'));
+    }
+    var t = document.getElementById('mnTemps'); if (t) t.textContent = formatMn(resteMn());
+  }
+  function contenuMn() {
+    var etat = mn.etat, enCoursMn = etat === 'marche' || etat === 'pause';
+    var rapides = [1, 5, 10, 15, 30].map(function (m) { return '<button type="button" data-mduree="' + m + '" class="' + (!enCoursMn && mn.duree === m * 60000 ? 'joue' : '') + '"' + (enCoursMn ? ' disabled' : '') + '>' + m + ' min</button>'; }).join('');
+    return '<div class="mn-temps" id="mnTemps" aria-live="off">' + formatMn(resteMn()) + '</div>' +
+      '<div class="mn-rapide">' + rapides + '</div>' +
+      '<div class="mn-libre"><label for="mnLibre">Autre durée :</label><input id="mnLibre" type="number" inputmode="numeric" min="1" max="600" placeholder="min"' + (enCoursMn ? ' disabled' : '') + '> <span>minutes</span></div>' +
+      '<div class="mn-actions">' +
+      (etat === 'marche' ? '<button class="bouton leger" type="button" data-mpause="1">⏸ Pause</button>' :
+        etat === 'pause' ? '<button class="bouton vert" type="button" data-mreprendre="1">▶ Reprendre</button>' :
+        '<button class="bouton vert" type="button" data-mlancer="1">▶ Lancer</button>') +
+      (enCoursMn ? '<button class="bouton danger" type="button" data-mannuler="1">✕ Annuler</button>' : '') + '</div>';
+  }
+  function dessinerMn() { var c = document.getElementById('mnCorps'); if (c) c.innerHTML = contenuMn(); }
+  function fermerMinuteur() { var f = document.getElementById('fenetreMinuteur'); if (f) f.remove(); }
+  function ouvrirMinuteur() {
+    if (mn.etat === 'sonne') { stopSonnerie(); return; }
+    fermerMinuteur();
+    var v = document.createElement('div');
+    v.className = 'voile'; v.id = 'fenetreMinuteur'; v.dataset.ouverte = String(Date.now());
+    v.innerHTML = '<div class="fenetre" role="dialog" aria-modal="true" aria-label="Minuteur">' +
+      '<div class="fenetre-tete"><h2>⏲️ Minuteur</h2><button class="bouton leger" type="button" data-mfermer="1">✕ Fermer</button></div>' +
+      '<div class="cal-corps" id="mnCorps"></div></div>';
+    document.body.appendChild(v);
+    dessinerMn();
+  }
+  document.getElementById('ouvrirMinuteur').addEventListener('click', ouvrirMinuteur);
+  document.addEventListener('click', function (ev) {
+    var al = ev.target.closest('[data-mstop]'); if (al) { stopSonnerie(); return; }
+    var f = document.getElementById('fenetreMinuteur'); if (!f) return;
+    f.dataset.ouverte = String(Date.now());
+    if (ev.target === f || ev.target.closest('[data-mfermer]')) { fermerMinuteur(); return; }
+    var b = ev.target.closest('[data-mduree]');
+    if (b) { mn.duree = Number(b.dataset.mduree) * 60000; dessinerMn(); return; }
+    if (ev.target.closest('[data-mlancer]')) {
+      var li = document.getElementById('mnLibre'), v = li ? Math.round(Number(li.value)) : 0;
+      if (li && li.value !== '') { if (!(v >= 1 && v <= 600)) { toast('Durée entre 1 et 600 minutes'); return; } mn.duree = v * 60000; }
+      debloquerSon();
+      mn.etat = 'marche'; mn.fin = Date.now() + mn.duree; sauverMn(); dessinerMn(); majMn(); return;
+    }
+    if (ev.target.closest('[data-mpause]')) { mn.reste = resteMn(); mn.etat = 'pause'; sauverMn(); dessinerMn(); majMn(); return; }
+    if (ev.target.closest('[data-mreprendre]')) { debloquerSon(); mn.fin = Date.now() + mn.reste; mn.etat = 'marche'; sauverMn(); dessinerMn(); majMn(); return; }
+    if (ev.target.closest('[data-mannuler]')) { mn.etat = 'repos'; sauverMn(); dessinerMn(); majMn(); return; }
+  });
+  var mnLibreEl = document;
+  document.addEventListener('input', function (ev) {
+    if (ev.target.id === 'mnLibre') { var v = Math.round(Number(ev.target.value)); if (v >= 1 && v <= 600) { mn.duree = v * 60000; var t = document.getElementById('mnTemps'); if (t) t.textContent = formatMn(mn.duree); document.querySelectorAll('[data-mduree].joue').forEach(function (x) { x.classList.remove('joue'); }); } }
+  });
+  setInterval(function () {
+    if (mn.etat === 'marche' && Date.now() >= mn.fin) { declencher(); return; }
+    if (mn.etat === 'marche' || mn.etat === 'pause') majMn();
+  }, 500);
+  setInterval(function () { var f = document.getElementById('fenetreMinuteur'); if (f && Date.now() - Number(f.dataset.ouverte) > 300000) fermerMinuteur(); }, 15000);
+  window.fermerFenetresCote = function () { fermerRadios(); fermerMinuteur(); };
+  majMn();
+
 })();
 
 /* ===== Fenêtre : récapitulatif des points (tableau, puis détail d'une fille) ===== */
@@ -1808,7 +2000,7 @@ function ouvrirVeille() {
   if (veilleOuverte) return;
   veilleOuverte = true;
   var f = document.getElementById('fenetreMeteo'); if (f) f.remove();
-  fermerDetailFille(); fermerRecap(); fermerCal();
+  fermerDetailFille(); fermerRecap(); fermerCal(); if (window.fermerFenetresCote) window.fermerFenetresCote();
   var v = document.createElement('div');
   v.className = 'veille'; v.id = 'veille'; v.setAttribute('role', 'button'); v.setAttribute('aria-label', 'Touche l\'écran pour revenir');
   v.innerHTML = '<div class="veille-bloc"></div><div class="veille-aide">Touche l\'écran pour revenir</div>';
