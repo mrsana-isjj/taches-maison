@@ -1676,7 +1676,7 @@ function phaseLune(date) {
   setInterval(function () { var f = document.getElementById('fenetreMeteo'); if (f && Date.now() - Number(f.dataset.ouverte) > 120000) fermerHeures(); }, 15000);
 
   var APPLI_RADIO = 'de.radio.android';
-  var lecteur = document.getElementById('lecteur'), courant = null, essais = 0, derniere = null, messageRadio = '', erreurRadio = false;
+  var lecteur = document.getElementById('lecteur'), courant = null, essais = 0, messageRadio = '', erreurRadio = false;
   function titre(t) { document.getElementById('radioTitre').textContent = t; }
   function memeRadio(a, b) { return !!a && !!b && a.url === b.url; }
   function afficherRadios() {
@@ -1696,7 +1696,7 @@ function phaseLune(date) {
     courant = null; titre('Radio'); if (!garderMessage) { messageRadio = ''; erreurRadio = false; } afficherRadios();
   }
   function jouer(r, auto) {
-    courant = r; derniere = r; dire('Connexion à ' + r.nom + '…'); titre('Connexion à ' + r.nom + '…');
+    courant = r; dire('Connexion à ' + r.nom + '…'); titre('Connexion à ' + r.nom + '…');
     lecteur.src = r.url + (r.url.indexOf('?') < 0 ? '?' : '&') + 't=' + Date.now();   // toujours le direct
     lecteur.play().then(function () { essais = 0; noterSon(); titre('🔊 ' + r.nom); dire(''); })
       .catch(function () { if (memeRadio(courant, r)) { courant = null; titre(auto ? '▶ Touche ' + r.nom + ' pour lancer' : 'Radio'); dire(auto ? 'Touche ' + r.nom + ' pour lancer' : '⚠️ Impossible de lire « ' + r.nom + ' » : flux injoignable ou non pris en charge', !auto); } });
@@ -1722,8 +1722,8 @@ function phaseLune(date) {
       '<div class="fenetre-tete"><h2>📻 Radios</h2><button class="bouton leger" type="button" data-rfermer="1">✕ Fermer</button></div>' +
       '<div class="cal-corps"><div id="radMsg" class="radio-msg"></div><div class="radios" id="radListe"></div>' +
       '<div class="radio-pied"><button class="bouton danger" type="button" data-rarret="1">⏹ Arrêter</button>' +
-      '<button class="bouton leger" type="button" data-rrelance="1" aria-label="Relancer le son (après reconnexion de la barre de son)">🔄 Relancer le son</button>' +
-      '<button class="bouton leger" type="button" data-rappli="radio" aria-label="Autres radios (appli radio.fr)">📱 Autres radios</button></div>' +
+      '<button class="bouton leger" type="button" data-rappli="radio" aria-label="Autres radios (appli radio.fr)">📱 Autres radios</button>' +
+      '<button class="bouton leger" type="button" data-rappli="ytmusic" aria-label="Ouvrir YouTube Music">🎵 YouTube Music</button></div>' +
       (peut ? '<div class="radio-ajout ligne-admin"><h4>Ajouter une radio (parents)</h4>' +
         '<input id="radNom" maxlength="40" placeholder="Nom de la radio" aria-label="Nom de la radio">' +
         '<input id="radUrl" type="url" inputmode="url" placeholder="Adresse directe du flux : https://…" aria-label="Adresse du flux audio">' +
@@ -1734,11 +1734,14 @@ function phaseLune(date) {
     document.body.appendChild(v);
     afficherRadios();
   }
-  var APPLI_RADIO_LIEN = function () {
-    var intent = 'intent://www.radio.fr/#Intent;scheme=https;package=' + APPLI_RADIO + ';end';
+  // Applis de musique : même forme de lien que celle qui ouvre bien radio.fr sur la tablette
+  var APPLIS = { radio: { site: 'www.radio.fr', paquet: APPLI_RADIO }, ytmusic: { site: 'music.youtube.com', paquet: 'com.google.android.apps.youtube.music' } };
+  function ouvrirAppli(cle) {
+    var a = APPLIS[cle]; if (!a) return;
+    var intent = 'intent://' + a.site + '/#Intent;scheme=https;package=' + a.paquet + ';end';
     if (window.fully && typeof fully.startIntent === 'function') { fully.startIntent(intent); return; }
     location.href = intent;
-  };
+  }
   document.getElementById('ouvrirRadios').addEventListener('click', ouvrirRadios);
   document.addEventListener('click', function (ev) {
     var f = document.getElementById('fenetreRadios'); if (!f) return;
@@ -1759,15 +1762,8 @@ function phaseLune(date) {
       return;
     }
     if (ev.target.closest('[data-rarret]')) { arreter(); return; }
-    if (ev.target.closest('[data-rrelance]')) {
-      var d = courant || derniere;
-      if (!d) { toast('Choisis d\'abord une station'); return; }
-      if (courant) arreter();
-      dire('Relance de ' + d.nom + '…');
-      setTimeout(function () { if (!courant) { essais = 0; jouer(d); } }, 700);
-      return;
-    }
-    if (ev.target.closest('[data-rappli]')) { if (courant) arreter(); APPLI_RADIO_LIEN(); return; }
+    b = ev.target.closest('[data-rappli]');
+    if (b) { if (courant) arreter(); ouvrirAppli(b.dataset.rappli); return; }
     b = ev.target.closest('[data-rajout]');
     if (b) {
       var nom = document.getElementById('radNom').value.trim(), url = document.getElementById('radUrl').value.trim();
